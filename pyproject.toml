@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bible-app"
+version = "0.0.0"
+description = "Bible Search App Backend"
+requires-python = ">=3.13"
+license = {text = "MIT"}
+authors = [{name = "BSP Org", email = "biblesearchproject@gmail.com"}]
+dependencies = []
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S", "ASYNC"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+skip-magic-trailing-comma = false
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+branch = true
+source = ["app"]
+
+[tool.coverage.report]
+omit = ["tests/*"]
+show_missing = true
+skip_covered = true
+
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+warn_return_any = false
+warn_unused_ignores = true
+warn_unreachable = true
+ignore_missing_imports = true
+no_implicit_optional = true
+check_untyped_defs = true
