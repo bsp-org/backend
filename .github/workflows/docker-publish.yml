@@ -1,0 +1,66 @@
+name: Build, Publish Docker Image, and Manual Deploy
+
+permissions:
+  contents: read
+  packages: write
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+      - pub*
+  workflow_dispatch: # allow manual trigger
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/$(basename $GITHUB_REPOSITORY)
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image tags
+        id: vars
+        run: |
+          COMMIT_SHORT=$(echo ${GITHUB_SHA} | cut -c1-7)
+          if [[ "${GITHUB_REF_NAME}" == "main" ]]; then
+            BRANCH_TAG="latest"
+          else
+            BRANCH_TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "COMMIT_TAG=${COMMIT_SHORT}" >> $GITHUB_ENV
+          echo "BRANCH_TAG=${BRANCH_TAG}" >> $GITHUB_ENV
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${BRANCH_TAG} -t ${{ env.IMAGE_NAME }}:${COMMIT_TAG} .
+
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE_NAME }}:${BRANCH_TAG}
+          docker push ${{ env.IMAGE_NAME }}:${COMMIT_TAG}
+
+  deploy:
+    needs: docker
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' # manual deploy only
+
+    steps:
+      - name: Manual deploy
+        run: |
+          COMMIT_TAG=$(echo ${GITHUB_SHA} | cut -c1-7)
+          echo "Deploying Docker image ${{ env.IMAGE_NAME }}:${COMMIT_TAG}"
+          # Add your deployment commands here
+
