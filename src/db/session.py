@@ -1,37 +1,65 @@
-"""Database engine and session management."""
+"""Database connection management."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase
+from peewee import Model
+from playhouse.postgres_ext import PostgresqlExtDatabase
 
-from app.config import get_settings
+from src.config import get_settings
 
 
-class Base(DeclarativeBase):
-    """Base class for SQLAlchemy models."""
+class BaseModel(Model):
+    """Base class for Peewee models."""
+
+    class Meta:
+        database = None
 
 
 settings = get_settings()
-engine = create_async_engine(
-    settings.database_dsn,
-    echo=settings.debug,
-    pool_pre_ping=True,
+
+# Create database instance
+database = PostgresqlExtDatabase(
+    settings.postgres_db,
+    user=settings.postgres_user,
+    password=settings.postgres_password,
+    host=settings.postgres_host,
+    port=settings.postgres_port,
+    autorollback=True,
 )
 
-SessionFactory = async_sessionmaker(
-    bind=engine,
-    expire_on_commit=False,
-    class_=AsyncSession,
-)
+# Set the database for BaseModel
+BaseModel._meta.database = database
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that yields an async database session."""
-    async with SessionFactory() as session:
-        yield session
+@asynccontextmanager
+async def get_db_connection():
+    """Context manager for database connections."""
+    database.connect(reuse_if_open=True)
+    try:
+        yield database
+    finally:
+        if not database.is_closed():
+            database.close()
 
 
-__all__ = ["Base", "engine", "SessionFactory", "get_session"]
+async def get_session() -> AsyncGenerator[PostgresqlExtDatabase, None]:
+    """FastAPI dependency that yields a database connection."""
+    async with get_db_connection() as db:
+        yield db
+
+
+def connect_db():
+    """Connect to the database."""
+    database.connect(reuse_if_open=True)
+
+
+def close_db():
+    """Close the database connection."""
+    if not database.is_closed():
+        database.close()
+
+
+__all__ = ["BaseModel", "database", "get_session", "connect_db", "close_db"]

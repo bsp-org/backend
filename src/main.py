@@ -5,8 +5,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.config import get_settings
-from app.db.session import engine
+from src.config import get_settings
+from src.db.session import close_db, connect_db, database
 
 logger = logging.getLogger(__name__)
 
@@ -16,18 +16,16 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     logger.debug("Starting app in %s mode", settings.env)
     try:
-        async with engine.begin() as connection:
-            await connection.run_sync(lambda conn: None)
+        connect_db()
+        database.execute_sql("SELECT 1")
+        logger.debug("Database connection established")
     except Exception as exc:  # pragma: no cover - best effort only
         logger.warning("Database connectivity check skipped: %s", exc)
     yield
     try:
-        await engine.dispose()
-    except ValueError as exc:  # pragma: no cover - optional greenlet dependency missing
-        if "greenlet" in str(exc):
-            logger.debug("Skipping engine dispose because greenlet is unavailable")
-        else:
-            raise
+        close_db()
+    except Exception as exc:  # pragma: no cover
+        logger.warning("Error closing database: %s", exc)
 
 
 app = FastAPI(
