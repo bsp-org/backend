@@ -14,16 +14,16 @@ install: venv
 	$(PIP) install -r requirements-dev.txt
 
 run:
-	$(PY) -m uvicorn app.main:app --reload
+	$(PY) -m uvicorn src.main:app --reload
 
 lint:
-	$(PY) -m ruff check app tests
+	$(PY) -m ruff check src tests
 
 fmt:
-	$(PY) -m ruff format app tests
+	$(PY) -m ruff format src tests
 
 type:
-	$(PY) -m mypy app
+	$(PY) -m mypy src
 
 test:
 	$(PY) -m pytest

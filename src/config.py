@@ -29,17 +29,6 @@ class Settings(BaseSettings):
 
     database_url: str | None = Field(default=None, alias="DATABASE_URL")
 
-    @property
-    def database_dsn(self) -> str:
-        """Return the SQLAlchemy async connection string."""
-        if self.database_url:
-            return self.database_url
-        return (
-            "postgresql+psycopg://"
-            f"{self.postgres_user}:{self.postgres_password}"
-            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-        )
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
