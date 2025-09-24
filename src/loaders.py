@@ -47,9 +47,7 @@ def load_bible_data(json_path: str) -> None:
             book_name = verse_data["book"]
 
             if book_name not in book_cache:
-                book, _ = Book.get_or_create(
-                    name=book_name, defaults={"display_name": book_name.replace("-", " ").title()}
-                )
+                book, _ = Book.get_or_create(name=book_name)
                 book_cache[book_name] = book
 
             book = book_cache[book_name]
@@ -74,8 +72,8 @@ def main():
 
     connect_db()
 
-    database.create_tables([Translation, Book, Verse])
-    print("✓ Created database tables")
+    print("Creating database tables if they don't already exist")
+    database.create_tables([Translation, Book, Verse], safe=True)
 
     data_dir = Path("data")
     for json_file in data_dir.glob("*.json"):

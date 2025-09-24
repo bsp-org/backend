@@ -5,18 +5,9 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from peewee import Model
 from playhouse.postgres_ext import PostgresqlExtDatabase
 
 from src.config import get_settings
-
-
-class BaseModel(Model):
-    """Base class for Peewee models."""
-
-    class Meta:
-        database = None
-
 
 settings = get_settings()
 
@@ -29,9 +20,6 @@ database = PostgresqlExtDatabase(
     port=settings.postgres_port,
     autorollback=True,
 )
-
-# Set the database for BaseModel
-BaseModel._meta.database = database
 
 
 @asynccontextmanager
@@ -62,4 +50,4 @@ def close_db():
         database.close()
 
 
-__all__ = ["BaseModel", "database", "get_session", "connect_db", "close_db"]
+__all__ = ["database", "get_session", "connect_db", "close_db"]

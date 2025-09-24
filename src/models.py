@@ -1,8 +1,15 @@
 """Bible data models."""
 
-from peewee import CharField, ForeignKeyField, IntegerField, TextField
+from peewee import CharField, ForeignKeyField, IntegerField, Model, TextField
 
-from src.db import BaseModel
+from src.db import database
+
+
+class BaseModel(Model):
+    """Base class for Peewee models."""
+
+    class Meta:
+        database = database
 
 
 class Translation(BaseModel):
@@ -21,7 +28,6 @@ class Book(BaseModel):
     """Bible book."""
 
     name = CharField(max_length=50, unique=True, index=True)
-    display_name = CharField(max_length=100)
 
     class Meta:
         table_name = "books"
