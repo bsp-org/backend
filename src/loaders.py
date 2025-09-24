@@ -1,17 +1,11 @@
 """Load Bible data into database."""
 
 import json
-import unicodedata
 from pathlib import Path
 
 from src.db import database
 from src.models import Book, Translation, Verse
-
-
-def normalize_text(text: str) -> str:
-    """Remove diacritics from text for search."""
-    nfd = unicodedata.normalize("NFD", text)
-    return "".join(char for char in nfd if unicodedata.category(char) != "Mn")
+from src.text_utils import normalize_text
 
 
 def load_bible_data(json_path: str) -> None:
