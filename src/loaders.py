@@ -18,7 +18,7 @@ def load_bible_data(json_path: str) -> None:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
-    translation_code = data["translation"]
+    abbreviation = data["translation"]
     full_name = data["full_name"]
     language = data["language"]
     source_url = data.get("source_url")
@@ -26,14 +26,14 @@ def load_bible_data(json_path: str) -> None:
 
     with database.atomic():
         translation, created = Translation.get_or_create(
-            code=translation_code,
+            abbreviation=abbreviation,
             defaults={"full_name": full_name, "language": language, "source_url": source_url},
         )
 
         if created:
-            print(f"✓ Created translation: {translation_code}")
+            print(f"✓ Created translation: {abbreviation}")
         else:
-            print(f"⚠ Translation {translation_code} already exists, will add/update verses")
+            print(f"⚠ Translation {abbreviation} already exists, will add/update verses")
 
         book_cache = {}
 
@@ -57,7 +57,7 @@ def load_bible_data(json_path: str) -> None:
                 defaults={"text": text, "text_normalized": text_normalized},
             )
 
-        print(f"✓ Loaded {len(verses_data)} verses for {translation_code}")
+        print(f"✓ Loaded {len(verses_data)} verses for {abbreviation}")
 
 
 def main():

@@ -15,7 +15,7 @@ class BaseModel(Model):
 class Translation(BaseModel):
     """Bible translation/version."""
 
-    code = CharField(max_length=10, unique=True, index=True)
+    abbreviation = CharField(max_length=10, unique=True, index=True)
     full_name = CharField(max_length=255)
     language = CharField(max_length=50)
     source_url = TextField(null=True)
