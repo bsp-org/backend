@@ -1,8 +1,14 @@
 """Bible data models."""
 
+import uuid
+
 from peewee import CharField, ForeignKeyField, IntegerField, Model, TextField
 
 from src.db import database
+
+
+def tiny_uuid():
+    return uuid.uuid4().hex[:8]
 
 
 class BaseModel(Model):
@@ -15,9 +21,10 @@ class BaseModel(Model):
 class Translation(BaseModel):
     """Bible translation/version."""
 
-    abbreviation = CharField(max_length=10, unique=True, index=True)
+    public_id = CharField(max_length=36, unique=True, index=True, default=tiny_uuid)
+    abbreviation = CharField(max_length=10)
     full_name = CharField(max_length=255)
-    language = CharField(max_length=50)
+    language_code = CharField(max_length=50)
     source_url = TextField(null=True)
 
     class Meta:
