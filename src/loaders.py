@@ -20,14 +20,20 @@ def load_bible_data(json_path: str) -> None:
 
     abbreviation = data["abbreviation"]
     full_name = data["full_name"]
-    language = data["language"]
+    language_code = data["language_code"]
     source_url = data.get("source_url")
     verses_data = data["verses"]
 
     with database.atomic():
         translation, created = Translation.get_or_create(
             abbreviation=abbreviation,
-            defaults={"full_name": full_name, "language": language, "source_url": source_url},
+            full_name=full_name,
+            language_code=language_code,
+            defaults={
+                "full_name": full_name,
+                "language_code": language_code,
+                "source_url": source_url,
+            },
         )
 
         if created:
@@ -35,27 +41,58 @@ def load_bible_data(json_path: str) -> None:
         else:
             print(f"⚠ Translation {abbreviation} already exists, will add/update verses")
 
+        # Create all books upfront
+        book_names = {verse_data["book"] for verse_data in verses_data}
         book_cache = {}
 
-        for verse_data in verses_data:
-            book_name = verse_data["book"]
+        for book_name in book_names:
+            book, _ = Book.get_or_create(name=book_name)
+            book_cache[book_name] = book
 
-            if book_name not in book_cache:
-                book, _ = Book.get_or_create(name=book_name)
-                book_cache[book_name] = book
+        # Process verses in batches
+        batch_size = 1000
+        total_verses = len(verses_data)
 
-            book = book_cache[book_name]
+        for i in range(0, total_verses, batch_size):
+            batch = verses_data[i : i + batch_size]
 
-            text = verse_data["text"]
-            text_normalized = normalize_text(text)
+            # Prepare verse data for bulk insert
+            verse_records = []
+            for verse_data in batch:
+                book = book_cache[verse_data["book"]]
+                text = verse_data["text"]
+                text_normalized = normalize_text(text)
 
-            Verse.get_or_create(
-                translation=translation,
-                book=book,
-                chapter=verse_data["chapter"],
-                verse=verse_data["verse"],
-                defaults={"text": text, "text_normalized": text_normalized},
-            )
+                verse_records.append(
+                    {
+                        "translation": translation.id,
+                        "book": book.id,
+                        "chapter": verse_data["chapter"],
+                        "verse": verse_data["verse"],
+                        "text": text,
+                        "text_normalized": text_normalized,
+                    }
+                )
+
+            # Bulk insert verses (skip duplicates)
+            try:
+                Verse.insert_many(verse_records).on_conflict_ignore().execute()
+            except Exception as e:
+                # Fallback to individual inserts if bulk insert fails
+                print(f"Bulk insert failed, falling back to individual inserts: {e}")
+                for record in verse_records:
+                    Verse.get_or_create(
+                        translation=record["translation"],
+                        book=record["book"],
+                        chapter=record["chapter"],
+                        verse=record["verse"],
+                        defaults={
+                            "text": record["text"],
+                            "text_normalized": record["text_normalized"],
+                        },
+                    )
+
+            print(f"  Processed {min(i + batch_size, total_verses)}/{total_verses} verses")
 
         print(f"✓ Loaded {len(verses_data)} verses for {abbreviation}")
 
