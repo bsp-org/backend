@@ -18,7 +18,7 @@ def load_bible_data(json_path: str) -> None:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
-    abbreviation = data["translation"]
+    abbreviation = data["abbreviation"]
     full_name = data["full_name"]
     language = data["language"]
     source_url = data.get("source_url")
