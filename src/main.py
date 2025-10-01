@@ -2,11 +2,20 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from pydantic import BaseModel, ConfigDict
 
 from src.config import get_settings
 from src.models import Translation
 
 logger = logging.getLogger(__name__)
+
+
+class TranslationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    abbreviation: str
+    full_name: str
+    language: str
 
 
 @asynccontextmanager
@@ -32,17 +41,10 @@ async def health() -> dict[str, str]:
 api_router = APIRouter(prefix="/api", tags=["api"])
 
 
-@api_router.get("/translations", tags=["translations"])
-async def get_translations():
+@api_router.get("/translations", response_model=list[TranslationResponse], tags=["translations"])
+async def get_translations() -> list[TranslationResponse]:
     translations = Translation.select()
-    return [
-        {
-            "abbreviation": translation.abbreviation,
-            "full_name": translation.full_name,
-            "language": translation.language,
-        }
-        for translation in translations
-    ]
+    return [TranslationResponse.model_validate(t) for t in translations]
 
 
 # Include the API router in the main app
