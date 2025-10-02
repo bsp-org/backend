@@ -66,29 +66,33 @@ async def get_translations() -> list[TranslationResponse]:
 async def search_verses(
     q: str = Query(..., description="Search query"),
     translation_id: str = Query(..., description="Public ID of the translation to search in"),
+    exact: bool = Query(False, description="Use exact match searching"),
 ) -> SearchResponse:
     try:
         translation = Translation.get(Translation.public_id == translation_id)
     except Translation.DoesNotExist:
         raise HTTPException(status_code=404, detail="Translation not found") from None
 
-    words = [normalize_text(w.strip()) for w in q.split()]
-
-    if not words:
-        return SearchResponse(results=[], total_count=0)
-
-    # Build the search query with ILIKE for each word
+    # Build the search query
     query = (
         Verse.select(Verse, Book.name.alias("book_name"))
         .join(Book)
         .where(Verse.translation == translation)
     )
 
-    # Add ILIKE condition for each word (all words must match)
-    for word in words:
-        query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
+    if exact:
+        # Exact match: search the text field with LIKE
+        query = query.where(Verse.text.like(f"%{q}%"))
+    else:
+        # Normalized search: split into words and search normalized_text
+        words = [normalize_text(w.strip()) for w in q.split()]
 
-    print(query)
+        if not words:
+            return SearchResponse(results=[], total_count=0)
+
+        # Add ILIKE condition for each word (all words must match)
+        for word in words:
+            query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
 
     # Execute query and build results
     verses = list(query)
