@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.db import database
 from src.models import Book, Translation, Verse
-from src.text_utils import normalize_text
+from src.text_utils import normalize, remove_diacritics
 
 
 def load_bible_data(json_path: str) -> None:
@@ -60,8 +60,9 @@ def load_bible_data(json_path: str) -> None:
             verse_records = []
             for verse_data in batch:
                 book = book_cache[verse_data["book"]]
-                text = verse_data["text"]
-                text_normalized = normalize_text(text)
+                raw_text = verse_data["text"]
+                text = normalize(text=raw_text, language_code=language_code)
+                text_normalized = remove_diacritics(text=text)
 
                 verse_records.append(
                     {

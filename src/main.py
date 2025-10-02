@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from src.book_names import get_book_display_name
 from src.config import get_settings
 from src.models import Book, Translation, Verse
-from src.text_utils import normalize_text
+from src.text_utils import NORMALIZATION_FUNCTIONS, remove_diacritics
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class VerseResult(BaseModel):
 
 
 class SearchResponse(BaseModel):
-    results: list[VerseResult]
+    verses: list[VerseResult]
     total_count: int
 
 
@@ -82,10 +82,11 @@ async def search_verses(
 
     if exact:
         # Exact match: search the text field with LIKE
-        query = query.where(Verse.text.like(f"%{q}%"))
+        normalized_query = NORMALIZATION_FUNCTIONS[translation.language_code](q)
+        query = query.where(Verse.text.like(f"%{normalized_query}%"))
     else:
         # Normalized search: split into words and search normalized_text
-        words = [normalize_text(w.strip()) for w in q.split()]
+        words = [remove_diacritics(w.strip()) for w in q.split()]
 
         if not words:
             return SearchResponse(results=[], total_count=0)
@@ -93,6 +94,8 @@ async def search_verses(
         # Add ILIKE condition for each word (all words must match)
         for word in words:
             query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
+
+    print(f"query: {query}")
 
     # Execute query and build results
     verses = list(query)
@@ -108,7 +111,7 @@ async def search_verses(
         for verse in verses
     ]
 
-    return SearchResponse(results=results, total_count=len(results))
+    return SearchResponse(verses=results, total_count=len(results))
 
 
 # Include the API router in the main app
