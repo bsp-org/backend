@@ -19,7 +19,7 @@ _CEDILLA_TO_COMMA = str.maketrans(
 )
 
 
-def normalize_ro(text: str) -> str:
+def _normalize_ro(text: str) -> str:
     """
     Normalize Romanian diacritics to modern comma-below forms (ș, ț)
     and canonical NFC. Also converts combining forms (s/t + U+0326/U+0327).
@@ -48,7 +48,7 @@ def normalize_ro(text: str) -> str:
     return unicodedata.normalize("NFC", t)
 
 
-NORMALIZATION_FUNCTIONS = {"ro": normalize_ro}
+NORMALIZATION_FUNCTIONS = {"ro": _normalize_ro}
 
 
 def normalize(text: str, language_code: str) -> str:

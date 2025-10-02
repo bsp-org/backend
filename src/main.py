@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from src.book_names import get_book_display_name
 from src.config import get_settings
 from src.models import Book, Translation, Verse
-from src.text_utils import NORMALIZATION_FUNCTIONS, remove_diacritics
+from src.text_utils import normalize, remove_diacritics
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def search_verses(
 
     if exact:
         # Exact match: search the text field with LIKE
-        normalized_query = NORMALIZATION_FUNCTIONS[translation.language_code](q)
+        normalized_query = normalize(text=q, language_code=translation.language_code)
         query = query.where(Verse.text.like(f"%{normalized_query}%"))
     else:
         # Normalized search: split into words and search normalized_text
