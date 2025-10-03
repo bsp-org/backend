@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from src.db import database
-from src.models import Book, Translation, Verse
+from src.models import Translation, Verse
 from src.text_utils import normalize, remove_diacritics
 
 
@@ -41,14 +41,6 @@ def load_bible_data(json_path: str) -> None:
         else:
             print(f"⚠ Translation {abbreviation} already exists, will add/update verses")
 
-        # Create all books upfront
-        book_names = {verse_data["book"] for verse_data in verses_data}
-        book_cache = {}
-
-        for book_name in book_names:
-            book, _ = Book.get_or_create(name=book_name)
-            book_cache[book_name] = book
-
         # Process verses in batches
         batch_size = 1000
         total_verses = len(verses_data)
@@ -59,7 +51,6 @@ def load_bible_data(json_path: str) -> None:
             # Prepare verse data for bulk insert
             verse_records = []
             for verse_data in batch:
-                book = book_cache[verse_data["book"]]
                 raw_text = verse_data["text"]
                 text = normalize(text=raw_text, language_code=language_code)
                 text_normalized = remove_diacritics(text=text)
@@ -67,7 +58,7 @@ def load_bible_data(json_path: str) -> None:
                 verse_records.append(
                     {
                         "translation": translation.id,
-                        "book": book.id,
+                        "book_name": verse_data["book"],
                         "chapter": verse_data["chapter"],
                         "verse": verse_data["verse"],
                         "text": text,
@@ -84,7 +75,7 @@ def load_bible_data(json_path: str) -> None:
                 for record in verse_records:
                     Verse.get_or_create(
                         translation=record["translation"],
-                        book=record["book"],
+                        book_name=record["book_name"],
                         chapter=record["chapter"],
                         verse=record["verse"],
                         defaults={
@@ -105,7 +96,7 @@ def main():
     connect_db()
 
     print("Creating database tables if they don't already exist")
-    database.create_tables([Translation, Book, Verse], safe=True)
+    database.create_tables([Translation, Verse], safe=True)
 
     data_dir = Path("data")
     for json_file in data_dir.glob("*.json"):

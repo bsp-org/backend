@@ -1,7 +1,9 @@
 """Book display names for different languages."""
 
+from enum import Enum
 
-class BookName:
+
+class BookName(str, Enum):
     GENESIS = "genesis"
     EXODUS = "exodus"
     LEVITICUS = "leviticus"
@@ -221,3 +223,8 @@ def get_book_display_name(book_key: str, language: str) -> str:
         Display name in the specified language, or the book_key if not found.
     """
     return BOOK_DISPLAY_NAMES.get(language, {}).get(book_key, book_key)
+
+
+def is_valid_book_name(book_name: str) -> bool:
+    """Check if a book name is a valid BookName value."""
+    return book_name in BookName._value2member_map_

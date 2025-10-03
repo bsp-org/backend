@@ -4,6 +4,7 @@ import uuid
 
 from peewee import CharField, ForeignKeyField, IntegerField, Model, TextField
 
+from src.book_names import is_valid_book_name
 from src.db import database
 
 
@@ -31,20 +32,11 @@ class Translation(BaseModel):
         table_name = "translations"
 
 
-class Book(BaseModel):
-    """Bible book."""
-
-    name = CharField(max_length=50, unique=True, index=True)
-
-    class Meta:
-        table_name = "books"
-
-
 class Verse(BaseModel):
     """Bible verse with support for search."""
 
     translation = ForeignKeyField(Translation, backref="verses", on_delete="CASCADE")
-    book = ForeignKeyField(Book, backref="verses", on_delete="CASCADE")
+    book_name = CharField(max_length=50, index=True)
     chapter = IntegerField(index=True)
     verse = IntegerField(index=True)
     text = TextField()
@@ -53,6 +45,12 @@ class Verse(BaseModel):
     class Meta:
         table_name = "verses"
         indexes = (
-            (("translation", "book", "chapter", "verse"), True),
-            (("book", "chapter", "verse"), False),
+            (("translation", "book_name", "chapter", "verse"), True),
+            (("book_name", "chapter", "verse"), False),
         )
+
+    def save(self, *args, **kwargs):
+        """Validate book_name before saving."""
+        if not is_valid_book_name(self.book_name):
+            raise ValueError(f"Invalid book name: {self.book_name}")
+        return super().save(*args, **kwargs)

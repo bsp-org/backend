@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from src.book_names import get_book_display_name
 from src.config import get_settings
-from src.models import Book, Translation, Verse
+from src.models import Translation, Verse
 from src.text_utils import normalize, remove_diacritics
 
 logger = logging.getLogger(__name__)
@@ -74,11 +74,7 @@ async def search_verses(
         raise HTTPException(status_code=404, detail="Translation not found") from None
 
     # Build the search query
-    query = (
-        Verse.select(Verse, Book.name.alias("book_name"))
-        .join(Book)
-        .where(Verse.translation == translation)
-    )
+    query = Verse.select().where(Verse.translation == translation)
 
     if exact:
         # Exact match: search the text field with LIKE
@@ -102,7 +98,7 @@ async def search_verses(
     results = [
         VerseResult(
             book_name=get_book_display_name(
-                book_key=verse.book.book_name, language=translation.language_code
+                book_key=verse.book_name, language=translation.language_code
             ),
             chapter=verse.chapter,
             verse=verse.verse,
