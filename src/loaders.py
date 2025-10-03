@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from src.book_names import get_book_id
 from src.db import database
 from src.models import Translation, Verse
 from src.text_utils import normalize, remove_diacritics
@@ -54,11 +55,13 @@ def load_bible_data(json_path: str) -> None:
                 raw_text = verse_data["text"]
                 text = normalize(text=raw_text, language_code=language_code)
                 text_normalized = remove_diacritics(text=text)
+                book_name = verse_data["book"]
 
                 verse_records.append(
                     {
                         "translation": translation.id,
-                        "book_name": verse_data["book"],
+                        "book_id": get_book_id(book_name),
+                        "book_name": book_name,
                         "chapter": verse_data["chapter"],
                         "verse": verse_data["verse"],
                         "text": text,
@@ -79,6 +82,7 @@ def load_bible_data(json_path: str) -> None:
                         chapter=record["chapter"],
                         verse=record["verse"],
                         defaults={
+                            "book_id": record["book_id"],
                             "text": record["text"],
                             "text_normalized": record["text_normalized"],
                         },

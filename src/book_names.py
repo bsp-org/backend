@@ -72,6 +72,85 @@ class BookName(str, Enum):
     REVELATION = "revelation"
 
 
+# Map book names to their canonical Bible order (1-66)
+BOOK_ORDER: dict[str, int] = {
+    BookName.GENESIS: 1,
+    BookName.EXODUS: 2,
+    BookName.LEVITICUS: 3,
+    BookName.NUMBERS: 4,
+    BookName.DEUTERONOMY: 5,
+    BookName.JOSHUA: 6,
+    BookName.JUDGES: 7,
+    BookName.RUTH: 8,
+    BookName.SAMUEL_1: 9,
+    BookName.SAMUEL_2: 10,
+    BookName.KINGS_1: 11,
+    BookName.KINGS_2: 12,
+    BookName.CHRONICLES_1: 13,
+    BookName.CHRONICLES_2: 14,
+    BookName.EZRA: 15,
+    BookName.NEHEMIAH: 16,
+    BookName.ESTHER: 17,
+    BookName.JOB: 18,
+    BookName.PSALMS: 19,
+    BookName.PROVERBS: 20,
+    BookName.ECCLESIASTES: 21,
+    BookName.SONG_OF_SOLOMON: 22,
+    BookName.ISAIAH: 23,
+    BookName.JEREMIAH: 24,
+    BookName.LAMENTATIONS: 25,
+    BookName.EZEKIEL: 26,
+    BookName.DANIEL: 27,
+    BookName.HOSEA: 28,
+    BookName.JOEL: 29,
+    BookName.AMOS: 30,
+    BookName.OBADIAH: 31,
+    BookName.JONAH: 32,
+    BookName.MICAH: 33,
+    BookName.NAHUM: 34,
+    BookName.HABAKKUK: 35,
+    BookName.ZEPHANIAH: 36,
+    BookName.HAGGAI: 37,
+    BookName.ZECHARIAH: 38,
+    BookName.MALACHI: 39,
+    BookName.MATTHEW: 40,
+    BookName.MARK: 41,
+    BookName.LUKE: 42,
+    BookName.JOHN: 43,
+    BookName.ACTS: 44,
+    BookName.ROMANS: 45,
+    BookName.CORINTHIANS_1: 46,
+    BookName.CORINTHIANS_2: 47,
+    BookName.GALATIANS: 48,
+    BookName.EPHESIANS: 49,
+    BookName.PHILIPPIANS: 50,
+    BookName.COLOSSIANS: 51,
+    BookName.THESSALONIANS_1: 52,
+    BookName.THESSALONIANS_2: 53,
+    BookName.TIMOTHY_1: 54,
+    BookName.TIMOTHY_2: 55,
+    BookName.TITUS: 56,
+    BookName.PHILEMON: 57,
+    BookName.HEBREWS: 58,
+    BookName.JAMES: 59,
+    BookName.PETER_1: 60,
+    BookName.PETER_2: 61,
+    BookName.JOHN_1: 62,
+    BookName.JOHN_2: 63,
+    BookName.JOHN_3: 64,
+    BookName.JUDE: 65,
+    BookName.REVELATION: 66,
+}
+
+
+def get_book_id(book_name: str) -> int:
+    """Get the canonical Bible order ID for a book (1-66)."""
+    book_id = BOOK_ORDER.get(book_name)
+    if book_id is None:
+        raise ValueError(f"Invalid book name: {book_name}")
+    return book_id
+
+
 BOOK_DISPLAY_NAMES: dict[str, dict[str, str]] = {
     "en": {
         BookName.GENESIS: "Genesis",
