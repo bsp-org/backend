@@ -12,7 +12,6 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/initdb/01_extensions.sql:/docker-entrypoint-initdb.d/01_extensions.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -25,6 +24,8 @@ services:
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: db  
     volumes:
       - .:/app
     ports:
