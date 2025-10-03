@@ -1,6 +1,7 @@
 """API endpoints for Bible app."""
 
 from fastapi import APIRouter, HTTPException, Query
+from peewee import fn
 from pydantic import BaseModel, ConfigDict
 
 from src.books import get_book_display_name, get_book_id
@@ -56,6 +57,30 @@ class ContentResponse(BaseModel):
     total_verses: int
 
 
+class ChapterInfo(BaseModel):
+    chapter: int
+    verse_count: int
+
+
+class BookMetadata(BaseModel):
+    book_id: int
+    book_name: str
+    display_book_name: str
+    chapter_count: int
+    chapters: list[ChapterInfo]
+
+
+class TranslationMetadata(BaseModel):
+    translation_id: str
+    abbreviation: str
+    full_name: str
+    language_code: str
+    books: list[BookMetadata]
+    total_books: int
+    total_chapters: int
+    total_verses: int
+
+
 # Create API router
 api_router = APIRouter(prefix="/api", tags=["api"])
 
@@ -64,6 +89,87 @@ api_router = APIRouter(prefix="/api", tags=["api"])
 async def get_translations() -> list[TranslationResponse]:
     translations = Translation.select()
     return [TranslationResponse.model_validate(t) for t in translations]
+
+
+@api_router.get(
+    "/translations/{translation_id}/metadata",
+    response_model=TranslationMetadata,
+    tags=["translations"],
+)
+async def get_translation_metadata(translation_id: str) -> TranslationMetadata:
+    """
+    Get complete metadata for a translation including:
+    - All books with their IDs, names, and display names
+    - Chapter counts per book
+    - Verse counts per chapter
+    - Total statistics
+    """
+    # Validate translation exists
+    try:
+        translation = Translation.get(Translation.public_id == translation_id)
+    except Translation.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Translation not found") from None
+
+    # Query to get chapter and verse counts grouped by book
+    # This uses a single efficient query to get all metadata
+    query = (
+        Verse.select(
+            Verse.book_id,
+            Verse.book_name,
+            Verse.chapter,
+            fn.COUNT(Verse.id).alias("verse_count"),
+        )
+        .where(Verse.translation == translation)
+        .group_by(Verse.book_id, Verse.book_name, Verse.chapter)
+        .order_by(Verse.book_id, Verse.chapter)
+    )
+
+    print(query)
+
+    # Build book metadata structure
+    books_dict: dict[int, dict] = {}
+    total_verses = 0
+    total_chapters = 0
+
+    for row in query:
+        book_id = row.book_id
+        book_name = row.book_name
+        chapter = row.chapter
+        verse_count = row.verse_count
+
+        # Initialize book if not exists
+        if book_id not in books_dict:
+            books_dict[book_id] = {
+                "book_id": book_id,
+                "book_name": book_name,
+                "display_book_name": get_book_display_name(
+                    book_key=book_name, language=translation.language_code
+                ),
+                "chapters": [],
+            }
+
+        # Add chapter info
+        books_dict[book_id]["chapters"].append({"chapter": chapter, "verse_count": verse_count})
+
+        total_verses += verse_count
+        total_chapters += 1
+
+    # Convert to list and add chapter counts
+    books = []
+    for book_data in books_dict.values():
+        book_data["chapter_count"] = len(book_data["chapters"])
+        books.append(BookMetadata(**book_data))
+
+    return TranslationMetadata(
+        translation_id=translation.public_id,
+        abbreviation=translation.abbreviation,
+        full_name=translation.full_name,
+        language_code=translation.language_code,
+        books=books,
+        total_books=len(books),
+        total_chapters=total_chapters,
+        total_verses=total_verses,
+    )
 
 
 @api_router.get("/search", response_model=SearchResponse, tags=["search"])
