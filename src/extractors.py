@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-from src.book_names import BookName
+from src.books import BookName
 
 # USFX book code mapping (from the actual XML file)
 USFX_BOOK_MAPPING = {

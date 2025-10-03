@@ -1,0 +1,258 @@
+"""API endpoints for Bible app."""
+
+from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
+
+from src.books import get_book_display_name, get_book_id
+from src.models import Translation, Verse
+from src.text_utils import normalize, remove_diacritics
+
+
+class TranslationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    public_id: str
+    abbreviation: str
+    full_name: str
+    language_code: str
+
+
+class VerseResult(BaseModel):
+    book_id: int
+    book_name: str
+    display_book_name: str
+    chapter: int
+    verse: int
+    text: str
+
+
+class SearchResponse(BaseModel):
+    verses: list[VerseResult]
+    total_count: int
+
+
+class VerseReference(BaseModel):
+    book: str
+    chapter: int
+    verse: int | None = None
+
+
+class ContentVerse(BaseModel):
+    book_id: int
+    book_name: str
+    display_book_name: str
+    chapter: int
+    verse: int
+    text: str
+
+
+class TranslationContent(BaseModel):
+    translation_id: str
+    verses: list[ContentVerse]
+
+
+class ContentResponse(BaseModel):
+    content: list[TranslationContent]
+    total_verses: int
+
+
+# Create API router
+api_router = APIRouter(prefix="/api", tags=["api"])
+
+
+@api_router.get("/translations", response_model=list[TranslationResponse], tags=["translations"])
+async def get_translations() -> list[TranslationResponse]:
+    translations = Translation.select()
+    return [TranslationResponse.model_validate(t) for t in translations]
+
+
+@api_router.get("/search", response_model=SearchResponse, tags=["search"])
+async def search_verses(
+    q: str = Query(..., description="Search query"),
+    translation_id: str = Query(..., description="Public ID of the translation to search in"),
+    exact: bool = Query(False, description="Use exact match searching"),
+) -> SearchResponse:
+    try:
+        translation = Translation.get(Translation.public_id == translation_id)
+    except Translation.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Translation not found") from None
+
+    # Build the search query
+    query = Verse.select().where(Verse.translation == translation)
+
+    if exact:
+        # Exact match: search the text field with LIKE
+        normalized_query = normalize(text=q, language_code=translation.language_code)
+        query = query.where(Verse.text.like(f"%{normalized_query}%"))
+    else:
+        # Normalized search: split into words and search normalized_text
+        words = [remove_diacritics(w.strip()) for w in q.split()]
+
+        if not words:
+            return SearchResponse(results=[], total_count=0)
+
+        # Add ILIKE condition for each word (all words must match)
+        for word in words:
+            query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
+
+    print(f"query: {query}")
+
+    # Execute query and build results
+    verses = list(query)
+    results = [
+        VerseResult(
+            book_id=verse.book_id,
+            book_name=verse.book_name,
+            display_book_name=get_book_display_name(
+                book_key=verse.book_name, language=translation.language_code
+            ),
+            chapter=verse.chapter,
+            verse=verse.verse,
+            text=verse.text,
+        )
+        for verse in verses
+    ]
+
+    return SearchResponse(verses=results, total_count=len(results))
+
+
+@api_router.get("/content", response_model=ContentResponse, tags=["content"])
+async def get_content(
+    translation_ids: str = Query(..., description="Comma-separated translation IDs"),
+    start_book: str = Query(..., description="Starting book name"),
+    start_chapter: int = Query(..., description="Starting chapter number"),
+    start_verse: int | None = Query(None, description="Starting verse (None for whole chapter)"),
+    end_book: str | None = Query(
+        None, description="Ending book name (None for single verse/chapter)"
+    ),
+    end_chapter: int | None = Query(None, description="Ending chapter number"),
+    end_verse: int | None = Query(None, description="Ending verse number"),
+) -> ContentResponse:
+    """
+    Fetch Bible content with flexible range support:
+    - Single verse: start_book, start_chapter, start_verse
+    - Full chapter: start_book, start_chapter (no start_verse)
+    - Range: start_book/chapter/verse to end_book/chapter/verse
+    """
+    # Parse translation IDs
+    translation_id_list = [tid.strip() for tid in translation_ids.split(",")]
+
+    # Validate translations exist
+    translations = list(Translation.select().where(Translation.public_id.in_(translation_id_list)))
+    if len(translations) != len(translation_id_list):
+        raise HTTPException(status_code=404, detail="One or more translations not found")
+
+    # Build the query for each translation
+    content_by_translation = []
+    total_verses = 0
+
+    for translation in translations:
+        query = Verse.select().where(Verse.translation == translation)
+
+        # Determine query type and build appropriate filters
+        if end_book is None and end_chapter is None and end_verse is None:
+            # Single verse or chapter
+            if start_verse is None:
+                # Full chapter
+                query = query.where(
+                    (Verse.book_name == start_book) & (Verse.chapter == start_chapter)
+                )
+            else:
+                # Single verse
+                query = query.where(
+                    (Verse.book_name == start_book)
+                    & (Verse.chapter == start_chapter)
+                    & (Verse.verse == start_verse)
+                )
+        else:
+            # Range query - use book_id for cross-book ranges
+            start_book_id = get_book_id(start_book)
+            start_chapter_val = start_chapter
+            start_verse_val = start_verse if start_verse is not None else 1
+
+            end_book_val = end_book if end_book is not None else start_book
+            end_book_id = get_book_id(end_book_val)
+            end_chapter_val = end_chapter if end_chapter is not None else start_chapter
+            end_verse_val = end_verse if end_verse is not None else 999
+
+            # Build range condition using book_id for proper ordering
+            if start_book_id == end_book_id:
+                # Same book range
+                if start_chapter_val == end_chapter_val:
+                    # Same chapter range
+                    query = query.where(
+                        (Verse.book_id == start_book_id)
+                        & (Verse.chapter == start_chapter_val)
+                        & (Verse.verse >= start_verse_val)
+                        & (Verse.verse <= end_verse_val)
+                    )
+                else:
+                    # Different chapters in same book
+                    query = query.where(
+                        (Verse.book_id == start_book_id)
+                        & (
+                            (
+                                (Verse.chapter == start_chapter_val)
+                                & (Verse.verse >= start_verse_val)
+                            )
+                            | (
+                                (Verse.chapter > start_chapter_val)
+                                & (Verse.chapter < end_chapter_val)
+                            )
+                            | ((Verse.chapter == end_chapter_val) & (Verse.verse <= end_verse_val))
+                        )
+                    )
+            else:
+                # Different books - use book_id for proper Bible ordering
+                query = query.where(
+                    (
+                        (Verse.book_id == start_book_id)
+                        & (
+                            (
+                                (Verse.chapter == start_chapter_val)
+                                & (Verse.verse >= start_verse_val)
+                            )
+                            | (Verse.chapter > start_chapter_val)
+                        )
+                    )
+                    | ((Verse.book_id > start_book_id) & (Verse.book_id < end_book_id))
+                    | (
+                        (Verse.book_id == end_book_id)
+                        & (
+                            (Verse.chapter < end_chapter_val)
+                            | ((Verse.chapter == end_chapter_val) & (Verse.verse <= end_verse_val))
+                        )
+                    )
+                )
+
+        # Order by natural Bible flow using book_id
+        query = query.order_by(Verse.book_id, Verse.chapter, Verse.verse)
+
+        # Get total count for first translation (all should have same count)
+        if total_verses == 0:
+            total_verses = query.count()
+
+        # Execute and build results
+        verses = list(query)
+        content_verses = [
+            ContentVerse(
+                book_id=verse.book_id,
+                book_name=verse.book_name,
+                display_book_name=get_book_display_name(
+                    book_key=verse.book_name, language=translation.language_code
+                ),
+                chapter=verse.chapter,
+                verse=verse.verse,
+                text=verse.text,
+            )
+            for verse in verses
+        ]
+
+        content_by_translation.append(
+            TranslationContent(translation_id=translation.public_id, verses=content_verses)
+        )
+
+    return ContentResponse(
+        content=content_by_translation,
+        total_verses=total_verses,
+    )
