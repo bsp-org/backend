@@ -124,8 +124,6 @@ async def get_translation_metadata(translation_id: str) -> TranslationMetadata:
         .order_by(Verse.book_id, Verse.chapter)
     )
 
-    print(query)
-
     # Build book metadata structure
     books_dict: dict[int, dict] = {}
     total_verses = 0
