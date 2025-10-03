@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from src.books import get_book_display_name, get_book_id
 from src.models import Translation, Verse
-from src.text_utils import normalize, remove_diacritics
+from src.text_utils import highlight_matches, normalize, remove_diacritics
 
 
 # Base models for shared structures
@@ -212,7 +212,7 @@ async def search_verses(
             ),
             chapter=verse.chapter,
             verse=verse.verse,
-            text=verse.text,
+            text=highlight_matches(verse.text, q, exact=exact),
         )
         for verse in verses
     ]
