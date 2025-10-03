@@ -53,3 +53,32 @@ NORMALIZATION_FUNCTIONS = {"ro": _normalize_ro}
 
 def normalize(text: str, language_code: str) -> str:
     return NORMALIZATION_FUNCTIONS[language_code](text)
+
+
+def highlight_matches(text: str, query: str, exact: bool = False) -> str:
+    """
+    Highlight matching text with bold HTML tags.
+
+    Args:
+        text: The text to search in
+        query: The search query
+        exact: If True, use exact matching; otherwise use word-based matching
+
+    Returns:
+        Text with matches wrapped in <b></b> tags
+    """
+    if not query:
+        return text
+
+    if exact:
+        # Case-insensitive exact phrase matching
+        pattern = re.compile(re.escape(query), re.IGNORECASE)
+        return pattern.sub(lambda m: f"<b>{m.group(0)}</b>", text)
+    else:
+        # Word-based matching - highlight each word independently
+        words = [w.strip() for w in query.split() if w.strip()]
+        result = text
+        for word in words:
+            pattern = re.compile(re.escape(word), re.IGNORECASE)
+            result = pattern.sub(lambda m: f"<b>{m.group(0)}</b>", result)
+        return result
