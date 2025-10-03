@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
 
-from src.book_names import get_book_display_name, get_book_id
+from src.books import get_book_display_name, get_book_id
 from src.models import Translation, Verse
 from src.text_utils import normalize, remove_diacritics
 

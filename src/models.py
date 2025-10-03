@@ -4,7 +4,7 @@ import uuid
 
 from peewee import CharField, ForeignKeyField, IntegerField, Model, TextField
 
-from src.book_names import get_book_id, is_valid_book_name
+from src.books import get_book_id, is_valid_book_name
 from src.db import database
 
 
