@@ -9,7 +9,10 @@ from src.models import Translation, Verse
 from src.text_utils import normalize, remove_diacritics
 
 
-class TranslationResponse(BaseModel):
+# Base models for shared structures
+class TranslationInfo(BaseModel):
+    """Translation identification and metadata."""
+
     model_config = ConfigDict(from_attributes=True)
 
     public_id: str
@@ -18,38 +21,33 @@ class TranslationResponse(BaseModel):
     language_code: str
 
 
-class VerseResult(BaseModel):
+class BookInfo(BaseModel):
+    """Book identification across all endpoints."""
+
     book_id: int
     book_name: str
     display_book_name: str
+
+
+class VerseData(BaseModel):
+    """A Bible verse with complete reference and text."""
+
+    book: BookInfo
     chapter: int
     verse: int
     text: str
 
 
+# Search endpoint models
 class SearchResponse(BaseModel):
-    verses: list[VerseResult]
+    verses: list[VerseData]
     total_count: int
 
 
-class VerseReference(BaseModel):
-    book: str
-    chapter: int
-    verse: int | None = None
-
-
-class ContentVerse(BaseModel):
-    book_id: int
-    book_name: str
-    display_book_name: str
-    chapter: int
-    verse: int
-    text: str
-
-
+# Content endpoint models
 class TranslationContent(BaseModel):
     translation_id: str
-    verses: list[ContentVerse]
+    verses: list[VerseData]
 
 
 class ContentResponse(BaseModel):
@@ -57,21 +55,23 @@ class ContentResponse(BaseModel):
     total_verses: int
 
 
+# Metadata endpoint models
 class ChapterInfo(BaseModel):
     chapter: int
     verse_count: int
 
 
-class BookMetadata(BaseModel):
-    book_id: int
-    book_name: str
-    display_book_name: str
+class BookMetadata(BookInfo):
+    """Book metadata extends BookInfo with structure details."""
+
     chapter_count: int
     chapters: list[ChapterInfo]
 
 
 class TranslationMetadata(BaseModel):
-    translation_id: str
+    """Translation metadata with complete structure."""
+
+    public_id: str
     abbreviation: str
     full_name: str
     language_code: str
@@ -85,10 +85,10 @@ class TranslationMetadata(BaseModel):
 api_router = APIRouter(prefix="/api", tags=["api"])
 
 
-@api_router.get("/translations", response_model=list[TranslationResponse], tags=["translations"])
-async def get_translations() -> list[TranslationResponse]:
+@api_router.get("/translations", response_model=list[TranslationInfo], tags=["translations"])
+async def get_translations() -> list[TranslationInfo]:
     translations = Translation.select()
-    return [TranslationResponse.model_validate(t) for t in translations]
+    return [TranslationInfo.model_validate(t) for t in translations]
 
 
 @api_router.get(
@@ -159,7 +159,7 @@ async def get_translation_metadata(translation_id: str) -> TranslationMetadata:
         books.append(BookMetadata(**book_data))
 
     return TranslationMetadata(
-        translation_id=translation.public_id,
+        public_id=translation.public_id,
         abbreviation=translation.abbreviation,
         full_name=translation.full_name,
         language_code=translation.language_code,
@@ -199,16 +199,16 @@ async def search_verses(
         for word in words:
             query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
 
-    print(f"query: {query}")
-
     # Execute query and build results
     verses = list(query)
     results = [
-        VerseResult(
-            book_id=verse.book_id,
-            book_name=verse.book_name,
-            display_book_name=get_book_display_name(
-                book_key=verse.book_name, language=translation.language_code
+        VerseData(
+            book=BookInfo(
+                book_id=verse.book_id,
+                book_name=verse.book_name,
+                display_book_name=get_book_display_name(
+                    book_key=verse.book_name, language=translation.language_code
+                ),
             ),
             chapter=verse.chapter,
             verse=verse.verse,
@@ -339,11 +339,13 @@ async def get_content(
         # Execute and build results
         verses = list(query)
         content_verses = [
-            ContentVerse(
-                book_id=verse.book_id,
-                book_name=verse.book_name,
-                display_book_name=get_book_display_name(
-                    book_key=verse.book_name, language=translation.language_code
+            VerseData(
+                book=BookInfo(
+                    book_id=verse.book_id,
+                    book_name=verse.book_name,
+                    display_book_name=get_book_display_name(
+                        book_key=verse.book_name, language=translation.language_code
+                    ),
                 ),
                 chapter=verse.chapter,
                 verse=verse.verse,
