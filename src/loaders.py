@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from src.db import database
-from src.models import Book, Translation, Verse
-from src.text_utils import normalize_text
+from src.models import Translation, Verse
+from src.text_utils import normalize, remove_diacritics
 
 
 def load_bible_data(json_path: str) -> None:
@@ -18,46 +18,75 @@ def load_bible_data(json_path: str) -> None:
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
 
-    translation_code = data["translation"]
+    abbreviation = data["abbreviation"]
     full_name = data["full_name"]
-    language = data["language"]
+    language_code = data["language_code"]
     source_url = data.get("source_url")
     verses_data = data["verses"]
 
     with database.atomic():
         translation, created = Translation.get_or_create(
-            code=translation_code,
-            defaults={"full_name": full_name, "language": language, "source_url": source_url},
+            abbreviation=abbreviation,
+            full_name=full_name,
+            language_code=language_code,
+            defaults={
+                "full_name": full_name,
+                "language_code": language_code,
+                "source_url": source_url,
+            },
         )
 
         if created:
-            print(f"✓ Created translation: {translation_code}")
+            print(f"✓ Created translation: {abbreviation}")
         else:
-            print(f"⚠ Translation {translation_code} already exists, will add/update verses")
+            print(f"⚠ Translation {abbreviation} already exists, will add/update verses")
 
-        book_cache = {}
+        # Process verses in batches
+        batch_size = 1000
+        total_verses = len(verses_data)
 
-        for verse_data in verses_data:
-            book_name = verse_data["book"]
+        for i in range(0, total_verses, batch_size):
+            batch = verses_data[i : i + batch_size]
 
-            if book_name not in book_cache:
-                book, _ = Book.get_or_create(name=book_name)
-                book_cache[book_name] = book
+            # Prepare verse data for bulk insert
+            verse_records = []
+            for verse_data in batch:
+                raw_text = verse_data["text"]
+                text = normalize(text=raw_text, language_code=language_code)
+                text_normalized = remove_diacritics(text=text)
 
-            book = book_cache[book_name]
+                verse_records.append(
+                    {
+                        "translation": translation.id,
+                        "book_name": verse_data["book"],
+                        "chapter": verse_data["chapter"],
+                        "verse": verse_data["verse"],
+                        "text": text,
+                        "text_normalized": text_normalized,
+                    }
+                )
 
-            text = verse_data["text"]
-            text_normalized = normalize_text(text)
+            # Bulk insert verses (skip duplicates)
+            try:
+                Verse.insert_many(verse_records).on_conflict_ignore().execute()
+            except Exception as e:
+                # Fallback to individual inserts if bulk insert fails
+                print(f"Bulk insert failed, falling back to individual inserts: {e}")
+                for record in verse_records:
+                    Verse.get_or_create(
+                        translation=record["translation"],
+                        book_name=record["book_name"],
+                        chapter=record["chapter"],
+                        verse=record["verse"],
+                        defaults={
+                            "text": record["text"],
+                            "text_normalized": record["text_normalized"],
+                        },
+                    )
 
-            Verse.get_or_create(
-                translation=translation,
-                book=book,
-                chapter=verse_data["chapter"],
-                verse=verse_data["verse"],
-                defaults={"text": text, "text_normalized": text_normalized},
-            )
+            print(f"  Processed {min(i + batch_size, total_verses)}/{total_verses} verses")
 
-        print(f"✓ Loaded {len(verses_data)} verses for {translation_code}")
+        print(f"✓ Loaded {len(verses_data)} verses for {abbreviation}")
 
 
 def main():
@@ -67,7 +96,7 @@ def main():
     connect_db()
 
     print("Creating database tables if they don't already exist")
-    database.create_tables([Translation, Book, Verse], safe=True)
+    database.create_tables([Translation, Verse], safe=True)
 
     data_dir = Path("data")
     for json_file in data_dir.glob("*.json"):
