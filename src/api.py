@@ -18,7 +18,9 @@ class TranslationResponse(BaseModel):
 
 
 class VerseResult(BaseModel):
+    book_id: int
     book_name: str
+    display_book_name: str
     chapter: int
     verse: int
     text: str
@@ -36,7 +38,9 @@ class VerseReference(BaseModel):
 
 
 class ContentVerse(BaseModel):
+    book_id: int
     book_name: str
+    display_book_name: str
     chapter: int
     verse: int
     text: str
@@ -97,7 +101,9 @@ async def search_verses(
     verses = list(query)
     results = [
         VerseResult(
-            book_name=get_book_display_name(
+            book_id=verse.book_id,
+            book_name=verse.book_name,
+            display_book_name=get_book_display_name(
                 book_key=verse.book_name, language=translation.language_code
             ),
             chapter=verse.chapter,
@@ -230,7 +236,9 @@ async def get_content(
         verses = list(query)
         content_verses = [
             ContentVerse(
-                book_name=get_book_display_name(
+                book_id=verse.book_id,
+                book_name=verse.book_name,
+                display_book_name=get_book_display_name(
                     book_key=verse.book_name, language=translation.language_code
                 ),
                 chapter=verse.chapter,
