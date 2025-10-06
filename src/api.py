@@ -26,7 +26,7 @@ class BookInfo(BaseModel):
 
     id: int
     name: str
-    displan_name: str
+    display_name: str
 
 
 class VerseData(BaseModel):
@@ -106,7 +106,7 @@ async def get_translations() -> list[TranslationInfo]:
 async def get_translation_metadata(translation_id: str) -> TranslationMetadata:
     """
     Get complete metadata for a translation including:
-    - All books with their IDs, names, and display names
+    - All books with their IDs, names, and display_name names
     - Chapter counts per book
     - Verse counts per chapter
     - Total statistics
@@ -145,9 +145,9 @@ async def get_translation_metadata(translation_id: str) -> TranslationMetadata:
         # Initialize book if not exists
         if book_id not in books_dict:
             books_dict[book_id] = {
-                "book_id": book_id,
-                "book_name": book_name,
-                "display_book_name": get_book_display_name(
+                "id": book_id,
+                "name": book_name,
+                "display_name": get_book_display_name(
                     book_key=book_name, language=translation.language_code
                 ),
                 "chapters": [],
@@ -436,7 +436,7 @@ async def get_verses(
                 book=BookInfo(
                     id=verse.book_id,
                     name=verse.book_name,
-                    displan_name=get_book_display_name(
+                    display_name=get_book_display_name(
                         book_key=verse.book_name, language=translation.language_code
                     ),
                 ),
