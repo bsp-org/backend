@@ -471,39 +471,48 @@ def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
 async def get_verses(
     translation_ids: str = Query(..., description="Comma-separated translation IDs"),
     q: str | None = Query(
-        None, description="Search query (optional, can be combined with reference constraints)"
+        None, description="Search query (optional, can be combined with location constraints)"
     ),
     exact: bool = Query(False, description="Use exact match searching"),
     highlight: bool | None = Query(
         None, description="Highlight matches (default: true when q is provided)"
     ),
-    start_book: str | None = Query(None, description="Starting book name (optional constraint)"),
-    start_chapter: int | None = Query(
-        None, description="Starting chapter number (optional constraint)"
-    ),
-    start_verse: int | None = Query(None, description="Starting verse (optional constraint)"),
-    end_book: str | None = Query(None, description="Ending book name (optional constraint)"),
-    end_chapter: int | None = Query(
-        None, description="Ending chapter number (optional constraint)"
-    ),
-    end_verse: int | None = Query(None, description="Ending verse number (optional constraint)"),
+    # Point retrieval parameters
+    book: str | None = Query(None, description="Book name (for point queries)"),
+    chapter: int | None = Query(None, description="Chapter number (for point queries)"),
+    verse: int | None = Query(None, description="Verse number (for point queries)"),
+    # Range retrieval parameters
+    from_book: str | None = Query(None, description="Starting book name (for range queries)"),
+    from_chapter: int | None = Query(None, description="Starting chapter (for range queries)"),
+    from_verse: int | None = Query(None, description="Starting verse (for range queries)"),
+    to_book: str | None = Query(None, description="Ending book name (for range queries)"),
+    to_chapter: int | None = Query(None, description="Ending chapter (for range queries)"),
+    to_verse: int | None = Query(None, description="Ending verse (for range queries)"),
 ) -> UnifiedResponse:
     """
     Unified endpoint for Bible verse retrieval with flexible filtering.
 
     **Features:**
     - Text search with `q` parameter (exact or normalized matching)
-    - Reference-based filtering (book/chapter/verse ranges)
-    - Combine search with reference constraints
+    - Point retrieval using `book`, `chapter`, `verse` parameters
+    - Range retrieval using `from_*` and `to_*` parameters
+    - Combine search with location constraints
     - Support for multiple translations
     - Optional match highlighting
 
+    **Parameter Types (mutually exclusive):**
+    - Point queries: Use `book` [+ `chapter`] [+ `verse`]
+    - Range queries: Use `from_book` + `to_*` parameters
+
     **Examples:**
-    - Search across translation: `/api/verses?translation_ids=eng-kjv&q=love`
-    - Get specific verse: `/api/verses?translation_ids=eng-kjv&start_book=john&start_chapter=3&start_verse=16`
-    - Search within chapter: `/api/verses?translation_ids=eng-kjv&q=love&start_book=john&start_chapter=3`
-    - Get chapter range: `/api/verses?translation_ids=eng-kjv&start_book=john&start_chapter=1&end_chapter=3`
-    - Multiple translations: `/api/verses?translation_ids=eng-kjv,spa-rvr&start_book=genesis&start_chapter=1`
+    - Search: `/api/verses?translation_ids=eng-kjv&q=love`
+    - Single verse: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3&verse=16`
+    - Full chapter: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3`
+    - Full book: `/api/verses?translation_ids=eng-kjv&book=john`
+    - Verse range: `/api/verses?translation_ids=eng-kjv&from_book=john&from_chapter=3&from_verse=16&to_verse=18`
+    - Chapter range: `/api/verses?translation_ids=eng-kjv&from_book=john&from_chapter=3&to_chapter=5`
+    - Search in chapter: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3&q=love`
+    - Multiple translations: `/api/verses?translation_ids=eng-kjv,spa-rvr&book=john&chapter=3&verse=16`
     """
     # Parse translation IDs
     translation_id_list = [tid.strip() for tid in translation_ids.split(",")]
@@ -513,23 +522,61 @@ async def get_verses(
     if len(translations) != len(translation_id_list):
         raise HTTPException(status_code=404, detail="One or more translations not found")
 
-    # Set default start_chapter to 1 if start_book is provided but start_chapter is not
-    if start_book is not None and start_chapter is None:
-        start_chapter = 1
+    # Detect parameter type (point vs range)
+    has_point_params = book is not None or chapter is not None or verse is not None
+    has_range_params = (
+        from_book is not None
+        or from_chapter is not None
+        or from_verse is not None
+        or to_book is not None
+        or to_chapter is not None
+        or to_verse is not None
+    )
 
-    # Validate that if reference constraints are provided, we have start_book
-    has_reference_constraints = start_book is not None or start_chapter is not None
-    if has_reference_constraints and start_book is None:
+    # Validate mutually exclusive parameters
+    if has_point_params and has_range_params:
         raise HTTPException(
             status_code=400,
-            detail="Reference constraints require start_book",
+            detail="Cannot mix point parameters (book/chapter/verse) with range parameters (from_*/to_*)",
         )
 
-    # Require either search query or reference constraints
+    # Convert to internal format (start_*/end_* for helper functions)
+    if has_point_params:
+        # Point query - treat as single point or implicit range (e.g., whole chapter/book)
+        start_book = book
+        start_chapter = chapter  # Keep None if not provided (for entire book)
+        start_verse = verse
+        end_book = None
+        end_chapter = None
+        end_verse = None
+    elif has_range_params:
+        # Range query - requires from_book and either to_* parameters or from_chapter
+        if from_book is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Range queries require from_book parameter",
+            )
+        start_book = from_book
+        start_chapter = from_chapter if from_chapter is not None else 1
+        start_verse = from_verse
+        end_book = to_book
+        end_chapter = to_chapter
+        end_verse = to_verse
+    else:
+        # No location constraints, only search
+        start_book = None
+        start_chapter = None
+        start_verse = None
+        end_book = None
+        end_chapter = None
+        end_verse = None
+
+    # Validate that if reference constraints are provided, we have start_book
+    has_reference_constraints = start_book is not None
     if q is None and not has_reference_constraints:
         raise HTTPException(
             status_code=400,
-            detail="Either search query (q) or reference constraints (start_book, start_chapter) required",
+            detail="Either search query (q) or location constraints required",
         )
 
     # Determine highlight behavior
@@ -544,11 +591,17 @@ async def get_verses(
 
         # Apply reference constraints if provided
         if has_reference_constraints:
-            if start_book is None or start_chapter is None:
+            if start_book is None:
                 raise HTTPException(status_code=400, detail="Invalid reference constraints")
-            query = _apply_reference_constraints(
-                query, start_book, start_chapter, start_verse, end_book, end_chapter, end_verse
-            )
+
+            # Special case: entire book (book without chapter)
+            if start_chapter is None:
+                query = query.where(Verse.book_name == start_book)
+            else:
+                # Use helper function for chapter/verse level constraints
+                query = _apply_reference_constraints(
+                    query, start_book, start_chapter, start_verse, end_book, end_chapter, end_verse
+                )
 
         # Apply search filters if provided
         if q is not None:
