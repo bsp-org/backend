@@ -372,6 +372,101 @@ async def get_content(
     )
 
 
+def _apply_reference_constraints(
+    query,
+    start_book: str,
+    start_chapter: int,
+    start_verse: int | None,
+    end_book: str | None,
+    end_chapter: int | None,
+    end_verse: int | None,
+):
+    """Apply reference constraints to a verse query."""
+    if end_book is None and end_chapter is None and end_verse is None:
+        # Single verse or chapter
+        if start_verse is None:
+            # Full chapter
+            query = query.where((Verse.book_name == start_book) & (Verse.chapter == start_chapter))
+        else:
+            # Single verse
+            query = query.where(
+                (Verse.book_name == start_book)
+                & (Verse.chapter == start_chapter)
+                & (Verse.verse == start_verse)
+            )
+    else:
+        # Range query - use book_id for cross-book ranges
+        start_book_id = get_book_id(start_book)
+        start_chapter_val = start_chapter
+        start_verse_val = start_verse if start_verse is not None else 1
+
+        end_book_val = end_book if end_book is not None else start_book
+        end_book_id = get_book_id(end_book_val)
+        end_chapter_val = end_chapter if end_chapter is not None else start_chapter
+        end_verse_val = end_verse if end_verse is not None else 999
+
+        # Build range condition using book_id for proper ordering
+        if start_book_id == end_book_id:
+            # Same book range
+            if start_chapter_val == end_chapter_val:
+                # Same chapter range
+                query = query.where(
+                    (Verse.book_id == start_book_id)
+                    & (Verse.chapter == start_chapter_val)
+                    & (Verse.verse >= start_verse_val)
+                    & (Verse.verse <= end_verse_val)
+                )
+            else:
+                # Different chapters in same book
+                query = query.where(
+                    (Verse.book_id == start_book_id)
+                    & (
+                        ((Verse.chapter == start_chapter_val) & (Verse.verse >= start_verse_val))
+                        | ((Verse.chapter > start_chapter_val) & (Verse.chapter < end_chapter_val))
+                        | ((Verse.chapter == end_chapter_val) & (Verse.verse <= end_verse_val))
+                    )
+                )
+        else:
+            # Different books - use book_id for proper Bible ordering
+            query = query.where(
+                (
+                    (Verse.book_id == start_book_id)
+                    & (
+                        ((Verse.chapter == start_chapter_val) & (Verse.verse >= start_verse_val))
+                        | (Verse.chapter > start_chapter_val)
+                    )
+                )
+                | ((Verse.book_id > start_book_id) & (Verse.book_id < end_book_id))
+                | (
+                    (Verse.book_id == end_book_id)
+                    & (
+                        (Verse.chapter < end_chapter_val)
+                        | ((Verse.chapter == end_chapter_val) & (Verse.verse <= end_verse_val))
+                    )
+                )
+            )
+
+    return query
+
+
+def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
+    """Apply search filters to a verse query."""
+    if exact:
+        # Exact match: search the text field with LIKE
+        normalized_query = normalize(text=q, language_code=translation.language_code)
+        query = query.where(Verse.text.like(f"%{normalized_query}%"))
+    else:
+        # Normalized search: split into words and search normalized_text
+        words = [remove_diacritics(w.strip()) for w in q.split()]
+
+        if words:
+            # Add ILIKE condition for each word (all words must match)
+            for word in words:
+                query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
+
+    return query
+
+
 @api_router.get("/verses", response_model=UnifiedResponse, tags=["verses"])
 async def get_verses(
     translation_ids: str = Query(..., description="Comma-separated translation IDs"),
@@ -449,106 +544,15 @@ async def get_verses(
 
         # Apply reference constraints if provided
         if has_reference_constraints:
-            # Determine query type and build appropriate filters
-            if end_book is None and end_chapter is None and end_verse is None:
-                # Single verse or chapter
-                if start_verse is None:
-                    # Full chapter
-                    query = query.where(
-                        (Verse.book_name == start_book) & (Verse.chapter == start_chapter)
-                    )
-                else:
-                    # Single verse
-                    query = query.where(
-                        (Verse.book_name == start_book)
-                        & (Verse.chapter == start_chapter)
-                        & (Verse.verse == start_verse)
-                    )
-            else:
-                # Range query - use book_id for cross-book ranges
-                # start_book and start_chapter are guaranteed to be non-None by validation above
-                if start_book is None or start_chapter is None:
-                    raise HTTPException(status_code=400, detail="Invalid reference constraints")
-
-                start_book_id = get_book_id(start_book)
-                start_chapter_val = start_chapter
-                start_verse_val = start_verse if start_verse is not None else 1
-
-                end_book_val = end_book if end_book is not None else start_book
-                end_book_id = get_book_id(end_book_val)
-                end_chapter_val = end_chapter if end_chapter is not None else start_chapter
-                end_verse_val = end_verse if end_verse is not None else 999
-
-                # Build range condition using book_id for proper ordering
-                if start_book_id == end_book_id:
-                    # Same book range
-                    if start_chapter_val == end_chapter_val:
-                        # Same chapter range
-                        query = query.where(
-                            (Verse.book_id == start_book_id)
-                            & (Verse.chapter == start_chapter_val)
-                            & (Verse.verse >= start_verse_val)
-                            & (Verse.verse <= end_verse_val)
-                        )
-                    else:
-                        # Different chapters in same book
-                        query = query.where(
-                            (Verse.book_id == start_book_id)
-                            & (
-                                (
-                                    (Verse.chapter == start_chapter_val)
-                                    & (Verse.verse >= start_verse_val)
-                                )
-                                | (
-                                    (Verse.chapter > start_chapter_val)
-                                    & (Verse.chapter < end_chapter_val)
-                                )
-                                | (
-                                    (Verse.chapter == end_chapter_val)
-                                    & (Verse.verse <= end_verse_val)
-                                )
-                            )
-                        )
-                else:
-                    # Different books - use book_id for proper Bible ordering
-                    query = query.where(
-                        (
-                            (Verse.book_id == start_book_id)
-                            & (
-                                (
-                                    (Verse.chapter == start_chapter_val)
-                                    & (Verse.verse >= start_verse_val)
-                                )
-                                | (Verse.chapter > start_chapter_val)
-                            )
-                        )
-                        | ((Verse.book_id > start_book_id) & (Verse.book_id < end_book_id))
-                        | (
-                            (Verse.book_id == end_book_id)
-                            & (
-                                (Verse.chapter < end_chapter_val)
-                                | (
-                                    (Verse.chapter == end_chapter_val)
-                                    & (Verse.verse <= end_verse_val)
-                                )
-                            )
-                        )
-                    )
+            if start_book is None or start_chapter is None:
+                raise HTTPException(status_code=400, detail="Invalid reference constraints")
+            query = _apply_reference_constraints(
+                query, start_book, start_chapter, start_verse, end_book, end_chapter, end_verse
+            )
 
         # Apply search filters if provided
         if q is not None:
-            if exact:
-                # Exact match: search the text field with LIKE
-                normalized_query = normalize(text=q, language_code=translation.language_code)
-                query = query.where(Verse.text.like(f"%{normalized_query}%"))
-            else:
-                # Normalized search: split into words and search normalized_text
-                words = [remove_diacritics(w.strip()) for w in q.split()]
-
-                if words:
-                    # Add ILIKE condition for each word (all words must match)
-                    for word in words:
-                        query = query.where(Verse.text_normalized.ilike(f"%{word}%"))
+            query = _apply_search_filters(query, q, exact, translation)
 
         # Order by natural Bible flow using book_id
         query = query.order_by(Verse.book_id, Verse.chapter, Verse.verse)
