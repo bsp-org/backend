@@ -1,6 +1,6 @@
 """API endpoints for Bible app."""
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from peewee import fn
 from pydantic import BaseModel, ConfigDict
 
@@ -44,11 +44,22 @@ class TranslationContent(BaseModel):
     verses: list[VerseData]
 
 
+class PaginationInfo(BaseModel):
+    """Pagination metadata."""
+
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    previous: str | None
+    next: str | None
+
+
 class UnifiedResponse(BaseModel):
     """Unified response for verse retrieval with flexible filtering."""
 
-    translations: list[TranslationContent]
-    total_verses: int
+    pagination: PaginationInfo
+    results: list[TranslationContent]
 
 
 # Metadata endpoint models
@@ -263,6 +274,7 @@ def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
 
 @api_router.get("/verses", response_model=UnifiedResponse, tags=["verses"])
 async def get_verses(
+    request: Request,
     translation_ids: str = Query(..., description="Comma-separated translation IDs"),
     q: str | None = Query(
         None, description="Search query (optional, can be combined with location constraints)"
@@ -282,6 +294,9 @@ async def get_verses(
     to_book: str | None = Query(None, description="Ending book name (for range queries)"),
     to_chapter: int | None = Query(None, description="Ending chapter (for range queries)"),
     to_verse: int | None = Query(None, description="Ending verse (for range queries)"),
+    # Pagination parameters (PageNumberPagination style)
+    page: int = Query(1, description="Page number", ge=1),
+    page_size: int = Query(30, description="Number of verses per page", ge=1, le=1000),
 ) -> UnifiedResponse:
     """
     Unified endpoint for Bible verse retrieval with flexible filtering.
@@ -376,6 +391,9 @@ async def get_verses(
     # Determine highlight behavior
     should_highlight = highlight if highlight is not None else (q is not None)
 
+    # Calculate pagination offset
+    offset = (page - 1) * page_size
+
     # Build the query for each translation
     content_by_translation = []
     total_verses = 0
@@ -408,6 +426,9 @@ async def get_verses(
         if total_verses == 0:
             total_verses = query.count()
 
+        # Apply pagination
+        query = query.offset(offset).limit(page_size)
+
         # Execute and build results
         verses = list(query)
         content_verses = [
@@ -432,7 +453,34 @@ async def get_verses(
             TranslationContent(translation_id=translation.public_id, verses=content_verses)
         )
 
+    # Build pagination metadata
+    total_pages = (total_verses + page_size - 1) // page_size  # Ceiling division
+
+    # Build previous and next URLs (relative paths)
+    query_params = dict(request.query_params)
+
+    previous_url = None
+    if page > 1:
+        params = query_params.copy()
+        params["page"] = str(page - 1)
+        previous_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    next_url = None
+    if page < total_pages:
+        params = query_params.copy()
+        params["page"] = str(page + 1)
+        next_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    pagination_info = PaginationInfo(
+        page=page,
+        page_size=page_size,
+        total_items=total_verses,
+        total_pages=total_pages,
+        previous=previous_url,
+        next=next_url,
+    )
+
     return UnifiedResponse(
-        translations=content_by_translation,
-        total_verses=total_verses,
+        pagination=pagination_info,
+        results=content_by_translation,
     )
