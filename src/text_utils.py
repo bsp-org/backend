@@ -82,3 +82,10 @@ def highlight_matches(text: str, query: str, exact: bool = False) -> str:
             pattern = re.compile(re.escape(word), re.IGNORECASE)
             result = pattern.sub(lambda m: f"<b>{m.group(0)}</b>", result)
         return result
+
+
+def normalize_to_slug(text: str) -> str:
+    """Normalize a string into slug-friendly form."""
+    text = text.strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text)
+    return text.strip("-")

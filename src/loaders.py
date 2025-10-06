@@ -6,7 +6,21 @@ from pathlib import Path
 from src.books import get_book_id
 from src.db import database
 from src.models import Translation, Verse
-from src.text_utils import normalize, remove_diacritics
+from src.text_utils import normalize, normalize_to_slug, remove_diacritics
+
+
+def _build_public_id(
+    language_code: str, abbreviation: str, edition: str = "", publisher: str = "", scope: str = ""
+) -> str:
+    parts = [
+        normalize_to_slug(language_code),
+        normalize_to_slug(abbreviation),
+        normalize_to_slug(edition),
+        normalize_to_slug(publisher),
+        normalize_to_slug(scope),
+    ]
+
+    return "-".join([p for p in parts if p])
 
 
 def load_bible_data(json_path: str) -> None:
@@ -31,6 +45,9 @@ def load_bible_data(json_path: str) -> None:
             full_name=full_name,
             language_code=language_code,
             defaults={
+                "public_id": _build_public_id(
+                    language_code=language_code, abbreviation=abbreviation
+                ),
                 "full_name": full_name,
                 "language_code": language_code,
                 "source_url": source_url,
