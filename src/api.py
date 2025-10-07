@@ -39,11 +39,6 @@ class VerseData(BaseModel):
 
 
 # Unified endpoint models
-class TranslationContent(BaseModel):
-    translation_id: str
-    verses: list[VerseData]
-
-
 class PaginationInfo(BaseModel):
     """Pagination metadata."""
 
@@ -59,7 +54,7 @@ class UnifiedResponse(BaseModel):
     """Unified response for verse retrieval with flexible filtering."""
 
     pagination: PaginationInfo
-    results: list[TranslationContent]
+    verses: list[VerseData]
 
 
 # Metadata endpoint models
@@ -272,10 +267,41 @@ def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
     return query
 
 
+def _build_pagination_info(
+    page: int, page_size: int, total_verses: int, request: Request
+) -> PaginationInfo:
+    # Build pagination metadata
+    total_pages = (total_verses + page_size - 1) // page_size  # Ceiling division
+
+    # Build previous and next URLs (relative paths)
+    query_params = dict(request.query_params)
+
+    previous_url = None
+    if page > 1:
+        params = query_params.copy()
+        params["page"] = str(page - 1)
+        previous_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    next_url = None
+    if page < total_pages:
+        params = query_params.copy()
+        params["page"] = str(page + 1)
+        next_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    return PaginationInfo(
+        page=page,
+        page_size=page_size,
+        total_items=total_verses,
+        total_pages=total_pages,
+        previous=previous_url,
+        next=next_url,
+    )
+
+
 @api_router.get("/verses", response_model=UnifiedResponse, tags=["verses"])
 async def get_verses(
     request: Request,
-    translation_ids: str = Query(..., description="Comma-separated translation IDs"),
+    translation_id: str = Query(..., description="Translation ID"),
     q: str | None = Query(
         None, description="Search query (optional, can be combined with location constraints)"
     ),
@@ -306,7 +332,6 @@ async def get_verses(
     - Point retrieval using `book`, `chapter`, `verse` parameters
     - Range retrieval using `from_*` and `to_*` parameters
     - Combine search with location constraints
-    - Support for multiple translations
     - Optional match highlighting
 
     **Parameter Types (mutually exclusive):**
@@ -314,22 +339,19 @@ async def get_verses(
     - Range queries: Use `from_book` + `to_*` parameters
 
     **Examples:**
-    - Search: `/api/verses?translation_ids=eng-kjv&q=love`
-    - Single verse: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3&verse=16`
-    - Full chapter: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3`
-    - Full book: `/api/verses?translation_ids=eng-kjv&book=john`
-    - Verse range: `/api/verses?translation_ids=eng-kjv&from_book=john&from_chapter=3&from_verse=16&to_verse=18`
-    - Chapter range: `/api/verses?translation_ids=eng-kjv&from_book=john&from_chapter=3&to_chapter=5`
-    - Search in chapter: `/api/verses?translation_ids=eng-kjv&book=john&chapter=3&q=love`
-    - Multiple translations: `/api/verses?translation_ids=eng-kjv,spa-rvr&book=john&chapter=3&verse=16`
+    - Search: `/api/verses?translation_id=eng-kjv&q=love`
+    - Single verse: `/api/verses?translation_id=eng-kjv&book=john&chapter=3&verse=16`
+    - Full chapter: `/api/verses?translation_id=eng-kjv&book=john&chapter=3`
+    - Full book: `/api/verses?translation_id=eng-kjv&book=john`
+    - Verse range: `/api/verses?translation_id=eng-kjv&from_book=john&from_chapter=3&from_verse=16&to_verse=18`
+    - Chapter range: `/api/verses?translation_id=eng-kjv&from_book=john&from_chapter=3&to_chapter=5`
+    - Search in chapter: `/api/verses?translation_id=eng-kjv&book=john&chapter=3&q=love`
     """
-    # Parse translation IDs
-    translation_id_list = [tid.strip() for tid in translation_ids.split(",")]
-
-    # Validate translations exist
-    translations = list(Translation.select().where(Translation.public_id.in_(translation_id_list)))
-    if len(translations) != len(translation_id_list):
-        raise HTTPException(status_code=404, detail="One or more translations not found")
+    # Validate translation exists
+    try:
+        translation = Translation.get(Translation.public_id == translation_id)
+    except Translation.DoesNotExist:
+        raise HTTPException(status_code=404, detail="Translation not found") from None
 
     # Detect parameter type (point vs range)
     has_point_params = book is not None or chapter is not None or verse is not None
@@ -394,93 +416,61 @@ async def get_verses(
     # Calculate pagination offset
     offset = (page - 1) * page_size
 
-    # Build the query for each translation
-    content_by_translation = []
-    total_verses = 0
+    # Build the query
+    query = Verse.select().where(Verse.translation == translation)
 
-    for translation in translations:
-        query = Verse.select().where(Verse.translation == translation)
+    # Apply reference constraints if provided
+    if has_reference_constraints:
+        if start_book is None:
+            raise HTTPException(status_code=400, detail="Invalid reference constraints")
 
-        # Apply reference constraints if provided
-        if has_reference_constraints:
-            if start_book is None:
-                raise HTTPException(status_code=400, detail="Invalid reference constraints")
-
-            # Special case: entire book (book without chapter)
-            if start_chapter is None:
-                query = query.where(Verse.book_name == start_book)
-            else:
-                # Use helper function for chapter/verse level constraints
-                query = _apply_reference_constraints(
-                    query, start_book, start_chapter, start_verse, end_book, end_chapter, end_verse
-                )
-
-        # Apply search filters if provided
-        if q is not None:
-            query = _apply_search_filters(query, q, exact, translation)
-
-        # Order by natural Bible flow using book_id
-        query = query.order_by(Verse.book_id, Verse.chapter, Verse.verse)
-
-        # Get total count for first translation (all should have same count)
-        if total_verses == 0:
-            total_verses = query.count()
-
-        # Apply pagination
-        query = query.offset(offset).limit(page_size)
-
-        # Execute and build results
-        verses = list(query)
-        content_verses = [
-            VerseData(
-                book=BookInfo(
-                    id=verse.book_id,
-                    name=verse.book_name,
-                    display_name=get_book_display_name(
-                        book_key=verse.book_name, language=translation.language_code
-                    ),
-                ),
-                chapter=verse.chapter,
-                verse=verse.verse,
-                text=highlight_matches(verse.text, q, exact=exact)
-                if (should_highlight and q)
-                else verse.text,
+        # Special case: entire book (book without chapter)
+        if start_chapter is None:
+            query = query.where(Verse.book_name == start_book)
+        else:
+            # Use helper function for chapter/verse level constraints
+            query = _apply_reference_constraints(
+                query, start_book, start_chapter, start_verse, end_book, end_chapter, end_verse
             )
-            for verse in verses
-        ]
 
-        content_by_translation.append(
-            TranslationContent(translation_id=translation.public_id, verses=content_verses)
+    # Apply search filters if provided
+    if q is not None:
+        query = _apply_search_filters(query, q, exact, translation)
+
+    # Order by natural Bible flow using book_id
+    query = query.order_by(Verse.book_id, Verse.chapter, Verse.verse)
+
+    # Get total count
+    total_verses = query.count()
+
+    # Apply pagination
+    query = query.offset(offset).limit(page_size)
+
+    # Execute and build results
+    verses = list(query)
+    verse_data = [
+        VerseData(
+            book=BookInfo(
+                id=verse.book_id,
+                name=verse.book_name,
+                display_name=get_book_display_name(
+                    book_key=verse.book_name, language=translation.language_code
+                ),
+            ),
+            chapter=verse.chapter,
+            verse=verse.verse,
+            text=highlight_matches(verse.text, q, exact=exact)
+            if (should_highlight and q)
+            else verse.text,
         )
+        for verse in verses
+    ]
 
-    # Build pagination metadata
-    total_pages = (total_verses + page_size - 1) // page_size  # Ceiling division
-
-    # Build previous and next URLs (relative paths)
-    query_params = dict(request.query_params)
-
-    previous_url = None
-    if page > 1:
-        params = query_params.copy()
-        params["page"] = str(page - 1)
-        previous_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
-
-    next_url = None
-    if page < total_pages:
-        params = query_params.copy()
-        params["page"] = str(page + 1)
-        next_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
-
-    pagination_info = PaginationInfo(
-        page=page,
-        page_size=page_size,
-        total_items=total_verses,
-        total_pages=total_pages,
-        previous=previous_url,
-        next=next_url,
+    pagination_info = _build_pagination_info(
+        page=page, page_size=page_size, total_verses=total_verses, request=request
     )
 
     return UnifiedResponse(
         pagination=pagination_info,
-        results=content_by_translation,
+        verses=verse_data,
     )
