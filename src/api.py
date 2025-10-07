@@ -267,6 +267,37 @@ def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
     return query
 
 
+def _build_pagination_info(
+    page: int, page_size: int, total_verses: int, request: Request
+) -> PaginationInfo:
+    # Build pagination metadata
+    total_pages = (total_verses + page_size - 1) // page_size  # Ceiling division
+
+    # Build previous and next URLs (relative paths)
+    query_params = dict(request.query_params)
+
+    previous_url = None
+    if page > 1:
+        params = query_params.copy()
+        params["page"] = str(page - 1)
+        previous_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    next_url = None
+    if page < total_pages:
+        params = query_params.copy()
+        params["page"] = str(page + 1)
+        next_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
+
+    return PaginationInfo(
+        page=page,
+        page_size=page_size,
+        total_items=total_verses,
+        total_pages=total_pages,
+        previous=previous_url,
+        next=next_url,
+    )
+
+
 @api_router.get("/verses", response_model=UnifiedResponse, tags=["verses"])
 async def get_verses(
     request: Request,
@@ -435,31 +466,8 @@ async def get_verses(
         for verse in verses
     ]
 
-    # Build pagination metadata
-    total_pages = (total_verses + page_size - 1) // page_size  # Ceiling division
-
-    # Build previous and next URLs (relative paths)
-    query_params = dict(request.query_params)
-
-    previous_url = None
-    if page > 1:
-        params = query_params.copy()
-        params["page"] = str(page - 1)
-        previous_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
-
-    next_url = None
-    if page < total_pages:
-        params = query_params.copy()
-        params["page"] = str(page + 1)
-        next_url = f"{request.url.path}?{'&'.join(f'{k}={v}' for k, v in params.items())}"
-
-    pagination_info = PaginationInfo(
-        page=page,
-        page_size=page_size,
-        total_items=total_verses,
-        total_pages=total_pages,
-        previous=previous_url,
-        next=next_url,
+    pagination_info = _build_pagination_info(
+        page=page, page_size=page_size, total_verses=total_verses, request=request
     )
 
     return UnifiedResponse(
