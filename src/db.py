@@ -7,9 +7,7 @@ from contextlib import asynccontextmanager
 
 from playhouse.postgres_ext import PostgresqlExtDatabase
 
-from src.config import get_settings
-
-settings = get_settings()
+from src.config import settings
 
 # Create database instance
 database = PostgresqlExtDatabase(
