@@ -186,11 +186,11 @@ def _apply_reference_constraints(
         # Single verse or chapter
         if start_verse is None:
             # Full chapter
-            query = query.where((Verse.book_name == start_book) & (Verse.chapter == start_chapter))
+            query = query.where((Verse.book_id == start_book) & (Verse.chapter == start_chapter))
         else:
             # Single verse
             query = query.where(
-                (Verse.book_name == start_book)
+                (Verse.book_id == start_book)
                 & (Verse.chapter == start_chapter)
                 & (Verse.verse == start_verse)
             )
@@ -426,7 +426,7 @@ async def get_verses(
 
         # Special case: entire book (book without chapter)
         if start_chapter is None:
-            query = query.where(Verse.book_name == start_book)
+            query = query.where(Verse.book_id == start_book)
         else:
             # Use helper function for chapter/verse level constraints
             query = _apply_reference_constraints(
