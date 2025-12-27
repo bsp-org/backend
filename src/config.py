@@ -36,6 +36,13 @@ class Settings(BaseSettings):
         description="Allowed CORS origins (comma-separated in .env)",
     )
 
+    # JWT configuration
+    jwt_secret: str = Field(
+        default="development-secret-please-change-in-production",
+        alias="JWT_SECRET",
+        description="Secret key for JWT token generation",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
