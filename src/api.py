@@ -252,9 +252,11 @@ def _apply_reference_constraints(
 def _apply_search_filters(query, q: str, exact: bool, translation: Translation):
     """Apply search filters to a verse query."""
     if exact:
-        # Exact match: search the text field with LIKE
+        # Exact match: normalize query, remove diacritics, and search in text_normalized
+        # This allows matching whether user types with or without diacritics
         normalized_query = normalize(text=q, language_code=translation.language_code)
-        query = query.where(Verse.text.like(f"%{normalized_query}%"))
+        query_normalized = remove_diacritics(normalized_query)
+        query = query.where(Verse.text_normalized.ilike(f"%{query_normalized}%"))
     else:
         # Normalized search: split into words and search normalized_text
         words = [remove_diacritics(w.strip()) for w in q.split()]
@@ -459,7 +461,7 @@ async def get_verses(
             ),
             chapter=verse.chapter,
             verse=verse.verse,
-            text=highlight_matches(verse.text, q, exact=exact)
+            text=highlight_matches(verse.text, q, exact=exact, language_code=translation.language_code)
             if (should_highlight and q)
             else verse.text,
         )
