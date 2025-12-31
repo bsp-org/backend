@@ -19,31 +19,76 @@ logger = logging.getLogger(__name__)
 
 
 class EmailLoginRequest(BaseModel):
-    """Request model for user registration."""
+    """Request model for initiating email-based login."""
 
     email: EmailStr
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "email": "user@example.com"
+                }
+            ]
+        }
+    }
+
 
 class Email2LoginRequest(BaseModel):
-    """Request model for user registration."""
+    """Request model for verifying email login code."""
 
     email: EmailStr
     email_code: str
     token: str
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "email": "user@example.com",
+                    "email_code": "123456",
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            ]
+        }
+    }
+
 
 class EmailAuthResponse(BaseModel):
-    """The response for /login/email endpoint."""
+    """Response containing encrypted token for email verification."""
+
     token: str
     email_token_valid_until: datetime
 
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "email_token_valid_until": "2025-12-31T12:05:00"
+                }
+            ]
+        }
+    }
+
 
 class AuthResponse(BaseModel):
-    """Response model for authentication endpoints."""
+    """Response containing JWT access token for authenticated requests."""
 
     access_token: str
     token_type: str = "bearer"
     token_valid_until: datetime | None = None
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJpYXQiOjE3MDM5NjY0MDB9...",
+                    "token_type": "bearer"
+                }
+            ]
+        }
+    }
 
 
 # JWT utility functions
@@ -107,9 +152,40 @@ class User2FA:
 auth_router = APIRouter(prefix="/api", tags=["auth"])
 
 
-@auth_router.post("/login/email", response_model=EmailAuthResponse)
+@auth_router.post(
+    "/login/email",
+    response_model=EmailAuthResponse,
+    summary="Initiate email login",
+    description="""
+    Initiate the email-based login flow.
+
+    This endpoint:
+    1. Creates a new user if the email doesn't exist
+    2. Generates a 6-digit verification code
+    3. Sends the code to the provided email address
+    4. Returns an encrypted token valid for 5 minutes
+
+    The user must verify the code using the /login/email_verify endpoint.
+    """,
+    responses={
+        200: {
+            "description": "Login code sent successfully",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                        "email_token_valid_until": "2025-12-31T12:05:00"
+                    }
+                }
+            }
+        },
+        422: {
+            "description": "Invalid email format"
+        }
+    }
+)
 async def login(request: EmailLoginRequest) -> EmailAuthResponse:
-    """Login a user and return a JWT token."""
+    """Initiate email login flow."""
     try:
         # Find user by username
         user = User.get(User.email == request.email)
@@ -135,9 +211,41 @@ async def login(request: EmailLoginRequest) -> EmailAuthResponse:
 
 
 
-@auth_router.post("/login/email_verify", response_model=AuthResponse)
+@auth_router.post(
+    "/login/email_verify",
+    response_model=AuthResponse,
+    summary="Verify email login code",
+    description="""
+    Complete the email-based login flow by verifying the code.
+
+    This endpoint:
+    1. Validates the 6-digit code against the encrypted token
+    2. Checks that the token hasn't expired (5-minute validity)
+    3. Updates the user's last login timestamp
+    4. Returns a JWT access token for authenticated requests
+
+    The JWT token should be included in the Authorization header as:
+    `Authorization: Bearer <access_token>`
+    """,
+    responses={
+        200: {
+            "description": "Login successful, JWT token returned",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJpYXQiOjE3MDM5NjY0MDB9...",
+                        "token_type": "bearer"
+                    }
+                }
+            }
+        },
+        401: {
+            "description": "Invalid code, expired token, or user not found"
+        }
+    }
+)
 async def verify_email_login(request: Email2LoginRequest) -> AuthResponse:
-    """Verify email code and return a JWT token."""
+    """Verify email code and return JWT access token."""
     try:
         # Find user by username
         user = User.get(User.email == request.email)

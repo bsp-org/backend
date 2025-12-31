@@ -18,9 +18,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Bible App API",
+    title="Bible Search API",
     version="0.0.0",
+    description="API for searching and accessing Bible content with user authentication",
     lifespan=lifespan,
+    contact={
+        "name": "BSP Org",
+        "email": "biblesearchproject@gmail.com",
+    },
+    license_info={
+        "name": "MIT",
+    },
 )
 
 # Configure CORS
