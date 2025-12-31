@@ -38,12 +38,14 @@ def parse_smtp_url(smtp_url: str) -> dict[str, str | int | bool]:
     }
 
 
-def send_login_code_email(email: str, code: str) -> bool:
-    """Send login code via email.
+def send_email(to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
+    """Send an email with plain text and optional HTML content.
 
     Args:
-        email: Recipient email address
-        code: Login code to send
+        to_email: Recipient email address
+        subject: Email subject line
+        text_body: Plain text version of the email
+        html_body: Optional HTML version of the email
 
     Returns:
         bool: True if email was sent successfully, False otherwise
@@ -54,35 +56,18 @@ def send_login_code_email(email: str, code: str) -> bool:
 
         # Create message
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Your Bible Search Login Code"
+        msg["Subject"] = subject
         msg["From"] = settings.smtp_from_email
-        msg["To"] = email
+        msg["To"] = to_email
 
-        # Create plain text and HTML versions
-        text = f"""
-Your login code is: {code}
-
-This code will expire in 5 minutes.
-
-If you didn't request this code, please ignore this email.
-"""
-
-        html = f"""
-<html>
-  <body>
-    <h2>Your Bible Search Login Code</h2>
-    <p>Your login code is: <strong>{code}</strong></p>
-    <p>This code will expire in 5 minutes.</p>
-    <p><small>If you didn't request this code, please ignore this email.</small></p>
-  </body>
-</html>
-"""
-
-        # Attach both plain text and HTML versions
-        part1 = MIMEText(text, "plain")
-        part2 = MIMEText(html, "html")
+        # Attach plain text version
+        part1 = MIMEText(text_body, "plain")
         msg.attach(part1)
-        msg.attach(part2)
+
+        # Attach HTML version if provided
+        if html_body:
+            part2 = MIMEText(html_body, "html")
+            msg.attach(part2)
 
         # Send email
         with smtplib.SMTP(smtp_config["host"], smtp_config["port"]) as server:
@@ -93,11 +78,45 @@ If you didn't request this code, please ignore this email.
             if smtp_config["username"] and smtp_config["password"]:
                 server.login(smtp_config["username"], smtp_config["password"])
 
-            server.sendmail(settings.smtp_from_email, email, msg.as_string())
+            server.sendmail(settings.smtp_from_email, to_email, msg.as_string())
 
-        logger.info(f"Login code email sent successfully to {email}")
+        logger.info(f"Email sent successfully to {to_email}")
         return True
 
     except Exception as e:
-        logger.error(f"Failed to send login code email to {email}: {e}")
+        logger.error(f"Failed to send email to {to_email}: {e}")
         return False
+
+
+def send_login_code_email(email: str, code: str) -> bool:
+    """Send login code via email.
+
+    Args:
+        email: Recipient email address
+        code: Login code to send
+
+    Returns:
+        bool: True if email was sent successfully, False otherwise
+    """
+    subject = "Your Bible Search Login Code"
+
+    text_body = f"""
+Your login code is: {code}
+
+This code will expire in 5 minutes.
+
+If you didn't request this code, please ignore this email.
+"""
+
+    html_body = f"""
+<html>
+  <body>
+    <h2>Your Bible Search Login Code</h2>
+    <p>Your login code is: <strong>{code}</strong></p>
+    <p>This code will expire in 5 minutes.</p>
+    <p><small>If you didn't request this code, please ignore this email.</small></p>
+  </body>
+</html>
+"""
+
+    return send_email(email, subject, text_body, html_body)
