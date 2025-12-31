@@ -5,7 +5,7 @@ import sys
 import click
 from peewee import IntegrityError
 
-from src.db import connect_db, close_db, database
+from src.db import close_db, connect_db, database
 from src.users.models import User
 
 

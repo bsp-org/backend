@@ -1,21 +1,18 @@
 """Authentication API endpoints."""
 
-import logging
 import base64
+import logging
 import random
 import string
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Tuple
+from datetime import UTC, datetime, timedelta
 
 import jwt
-from fastapi import APIRouter, HTTPException
-from peewee import IntegrityError
-from pydantic import BaseModel, EmailStr
 from Crypto.Cipher import AES
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, EmailStr
 
 from src.config import settings
 from src.users.models import User
-
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +42,7 @@ class AuthResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
-    token_valid_until: Optional[datetime] = None
+    token_valid_until: datetime | None = None
 
 
 # JWT utility functions
@@ -53,7 +50,7 @@ def create_access_token(email: str) -> str:
     """Create a JWT access token without expiration."""
     payload = {
         "email": email,
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
     }
     token = jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
     return token
@@ -75,7 +72,7 @@ class User2FA:
         cipher = AES.new(self.user_enc_key, AES.MODE_CFB, self.IV)
         return cipher.decrypt(base64.b64decode(token)).decode()
 
-    def generate_code_token(self) -> Tuple[str, str, datetime]:
+    def generate_code_token(self) -> tuple[str, str, datetime]:
         code = ''.join(random.SystemRandom().choice(string.digits) for _ in range(self.TOKEN_DIGITS))
 
         valid_until = datetime.now() + self.TOKEN_VALID
@@ -134,8 +131,8 @@ async def login(request: EmailLoginRequest) -> EmailAuthResponse:
 
 
 @auth_router.post("/login/email_verify", response_model=AuthResponse)
-async def login(request: Email2LoginRequest) -> AuthResponse:
-    """Login a user and return a JWT token."""
+async def verify_email_login(request: Email2LoginRequest) -> AuthResponse:
+    """Verify email code and return a JWT token."""
     try:
         # Find user by username
         user = User.get(User.email == request.email)
