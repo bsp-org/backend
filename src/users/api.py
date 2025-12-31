@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from src.config import settings
+from src.email_service import send_login_code_email
 from src.users.models import User
 
 logger = logging.getLogger(__name__)
@@ -121,8 +122,11 @@ async def login(request: EmailLoginRequest) -> EmailAuthResponse:
     u2fa = User2FA(user.encrypt_key)
     code, token, valid_until = u2fa.generate_code_token()
 
-    # TODO: send code via email
-    print(f"Code to login for email: {request.email} is {code}.")
+    # Send code via email
+    email_sent = send_login_code_email(request.email, code)
+    if not email_sent:
+        logger.warning(f"Failed to send email to {request.email}, but proceeding with login")
+    logger.info(f"Code to login for email: {request.email} is {code}.")
 
     return EmailAuthResponse(
         token=token,

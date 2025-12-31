@@ -43,6 +43,18 @@ class Settings(BaseSettings):
         description="Secret key for JWT token generation",
     )
 
+    # Email configuration
+    email_smtp_url: str = Field(
+        default="smtp://localhost:587",
+        alias="EMAIL_SMTP_URL",
+        description="SMTP server URL (e.g., smtp://user:pass@host:port or smtps://user:pass@host:port)",
+    )
+    smtp_from_email: str = Field(
+        default="noreply@biblesearch.org",
+        alias="SMTP_FROM_EMAIL",
+        description="Email address to send from",
+    )
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
