@@ -1,5 +1,6 @@
 """Unit tests for User2FA class."""
 
+import base64
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -13,8 +14,9 @@ class TestUser2FA:
 
     @pytest.fixture
     def encryption_key(self):
-        """Provide a valid 16-byte encryption key for AES."""
-        return b"TestKey123456789"  # 16 bytes for AES
+        """Provide a valid 32-byte encryption key for AES-256, base64-encoded."""
+        # Generate a 32-byte key and base64-encode it (as stored in the database)
+        return base64.b64encode(b"TestKey1TestKey2TestKey3TestKey4").decode('utf-8')
 
     @pytest.fixture
     def user_2fa(self, encryption_key):
@@ -26,7 +28,9 @@ class TestUser2FA:
         user_2fa = User2FA(encryption_key)
         assert user_2fa is not None
         assert hasattr(user_2fa, 'user_enc_key')
-        assert user_2fa.user_enc_key == encryption_key
+        # user_enc_key should be the decoded bytes (32 bytes for AES-256)
+        assert user_2fa.user_enc_key == base64.b64decode(encryption_key)
+        assert len(user_2fa.user_enc_key) == 32
 
     def test_encryption_decryption_roundtrip(self, user_2fa):
         """Test that encryption and decryption are inverse operations."""
@@ -139,8 +143,12 @@ class TestUser2FA:
 
     def test_multiple_instances_with_different_keys(self):
         """Test that instances with different keys cannot decrypt each other's tokens."""
-        user_2fa_1 = User2FA(b"Key1234567890ABC")
-        user_2fa_2 = User2FA(b"DifferentKey1234")
+        # Create two different 32-byte keys, base64-encoded
+        key1 = base64.b64encode(b"Key1Key1Key1Key1Key1Key1Key1Key1").decode('utf-8')
+        key2 = base64.b64encode(b"Key2Key2Key2Key2Key2Key2Key2Key2").decode('utf-8')
+
+        user_2fa_1 = User2FA(key1)
+        user_2fa_2 = User2FA(key2)
 
         code, token, _ = user_2fa_1.generate_code_token()
         # Should return False because decryption with wrong key produces garbage

@@ -61,8 +61,9 @@ class User2FA:
     TOKEN_VALID = timedelta(minutes=5)
     IV = b'OurBSP_IV4567890'
 
-    def __init__(self, user_enc_key: bytes):
-        self.user_enc_key = user_enc_key
+    def __init__(self, user_enc_key: str):
+        # Decode the base64-encoded key to get the 32-byte AES key
+        self.user_enc_key = base64.b64decode(user_enc_key)
 
     def _enc(self, token: str) -> str:
         cipher = AES.new(self.user_enc_key, AES.MODE_CFB, self.IV)
@@ -145,6 +146,9 @@ async def verify_email_login(request: Email2LoginRequest) -> AuthResponse:
         raise HTTPException(status_code=401, detail="Invalid code.") from None
 
     token = create_access_token(request.email)
+
+    user.last_login_at = datetime.now()
+    user.save()
 
     return AuthResponse(
         access_token=token,
