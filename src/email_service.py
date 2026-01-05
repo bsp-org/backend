@@ -6,19 +6,31 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from urllib.parse import urlparse
 
+from pydantic import BaseModel
+
 from src.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-def parse_smtp_url(smtp_url: str) -> dict[str, str | int | bool]:
+class SMTPConfig(BaseModel):
+    """SMTP configuration parsed from URL."""
+
+    host: str
+    port: int
+    username: str
+    password: str
+    use_tls: bool
+
+
+def parse_smtp_url(smtp_url: str) -> SMTPConfig:
     """Parse SMTP URL into components.
 
     Args:
         smtp_url: SMTP URL in format smtp://[user:pass@]host[:port] or smtps://[user:pass@]host[:port]
 
     Returns:
-        dict: Dictionary with host, port, username, password, and use_tls keys
+        SMTPConfig: Pydantic model with host, port, username, password, and use_tls fields
     """
     parsed = urlparse(smtp_url)
 
@@ -29,13 +41,13 @@ def parse_smtp_url(smtp_url: str) -> dict[str, str | int | bool]:
     default_port = 465 if use_tls else 587
     port = parsed.port if parsed.port else default_port
 
-    return {
-        "host": parsed.hostname or "localhost",
-        "port": port,
-        "username": parsed.username or "",
-        "password": parsed.password or "",
-        "use_tls": use_tls,
-    }
+    return SMTPConfig(
+        host=parsed.hostname or "localhost",
+        port=port,
+        username=parsed.username or "",
+        password=parsed.password or "",
+        use_tls=use_tls,
+    )
 
 
 def send_email(to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
@@ -70,13 +82,13 @@ def send_email(to_email: str, subject: str, text_body: str, html_body: str | Non
             msg.attach(part2)
 
         # Send email
-        with smtplib.SMTP(smtp_config["host"], smtp_config["port"]) as server:
-            if smtp_config["use_tls"]:
+        with smtplib.SMTP(smtp_config.host, smtp_config.port) as server:
+            if smtp_config.use_tls:
                 server.starttls()
 
             # Only authenticate if credentials are provided
-            if smtp_config["username"] and smtp_config["password"]:
-                server.login(smtp_config["username"], smtp_config["password"])
+            if smtp_config.username and smtp_config.password:
+                server.login(smtp_config.username, smtp_config.password)
 
             server.sendmail(settings.smtp_from_email, to_email, msg.as_string())
 
