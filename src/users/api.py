@@ -104,6 +104,7 @@ def create_access_token(email: str) -> str:
 
 class User2FA:
     TOKEN_DIGITS = 6
+    SALT_LEN = 5
     TOKEN_VALID = timedelta(minutes=5)
     IV = b'OurBSP_IV4567890'
 
@@ -121,10 +122,11 @@ class User2FA:
 
     def generate_code_token(self) -> tuple[str, str, datetime]:
         code = ''.join(random.SystemRandom().choice(string.digits) for _ in range(self.TOKEN_DIGITS))
+        salt = ''.join(random.SystemRandom().choice(string.ascii_letters) for _ in range(self.SALT_LEN))
 
         valid_until = datetime.now() + self.TOKEN_VALID
 
-        token = self._enc(f"{code}#{valid_until.isoformat()}")
+        token = self._enc(f"{salt}#{code}#{valid_until.isoformat()}")
 
         return code, token, valid_until
 
@@ -136,7 +138,7 @@ class User2FA:
 
         try:
             raw_token = self._dec(token)
-            raw_code, raw_valid_until = raw_token.split('#')
+            salt, raw_code, raw_valid_until = raw_token.split('#')
             valid_until = datetime.fromisoformat(raw_valid_until)
         except Exception as e:
             # Invalid token format, decryption failed, or other parsing errors
@@ -184,13 +186,13 @@ auth_router = APIRouter(prefix="/api", tags=["auth"])
         }
     }
 )
-async def login(request: EmailLoginRequest) -> EmailAuthResponse:
+async def login(login_data: EmailLoginRequest) -> EmailAuthResponse:
     """Initiate email login flow."""
     try:
         # Find user by username
-        user = User.get(User.email == request.email)
+        user = User.get(User.email == login_data.email)
     except User.DoesNotExist:
-        user = User(email=request.email)
+        user = User(email=login_data.email)
         user.save()
 
 
@@ -199,10 +201,11 @@ async def login(request: EmailLoginRequest) -> EmailAuthResponse:
     code, token, valid_until = u2fa.generate_code_token()
 
     # Send code via email
-    email_sent = send_login_code_email(request.email, code)
+    email_sent = send_login_code_email(login_data.email, code)
     if not email_sent:
-        logger.warning(f"Failed to send email to {request.email}, but proceeding with login")
-    logger.info(f"Code to login for email: {request.email} is {code}.")
+        logger.warning(f"Failed to send email to {login_data.email}, but proceeding with login")
+
+    logger.warning(f"Code to login for email: {login_data.email} is {code}.")
 
     return EmailAuthResponse(
         token=token,
@@ -244,20 +247,20 @@ async def login(request: EmailLoginRequest) -> EmailAuthResponse:
         }
     }
 )
-async def verify_email_login(request: Email2LoginRequest) -> AuthResponse:
+async def verify_email_login(login_data: Email2LoginRequest) -> AuthResponse:
     """Verify email code and return JWT access token."""
     try:
         # Find user by username
-        user = User.get(User.email == request.email)
+        user = User.get(User.email == login_data.email)
     except User.DoesNotExist:
         raise HTTPException(status_code=401, detail="Invalid code.") from None
 
     # verify the code and token
     u2fa = User2FA(user.encrypt_key)
-    if not u2fa.verify_code_token(request.email_code, request.token):
+    if not u2fa.verify_code_token(login_data.email_code, login_data.token):
         raise HTTPException(status_code=401, detail="Invalid code.") from None
 
-    token = create_access_token(request.email)
+    token = create_access_token(login_data.email)
 
     user.last_login_at = datetime.now()
     user.save()

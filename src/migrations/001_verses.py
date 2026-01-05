@@ -1,11 +1,9 @@
-"""Migration script to create the users table."""
-
 from src.db import close_db, connect_db, database
 from src.models import Translation, Verse
 
 
 def main():
-    """Create the users table."""
+    """Create the translation and verse tables."""
     try:
         connect_db()
 
