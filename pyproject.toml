@@ -21,11 +21,12 @@ dependencies = [
     "typing-extensions==4.12.2",
     "requests==2.31.0",
     "PyJWT==2.10.1",
-    "passlib[bcrypt]==1.7.4",
     "click>=8.0.0",
+    "cryptography>=46.0.3",
 ]
 
-[project.optional-dependencies]
+
+[dependency-groups]
 dev = [
     "pytest==8.3.2",
     "pytest-asyncio==0.23.6",
@@ -36,6 +37,10 @@ dev = [
     "pre-commit==3.7.1",
     "asgi-lifespan==2.1.0",
 ]
+local = [
+    "python-lsp-server>=1.14.0",
+]
+
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
@@ -81,3 +86,4 @@ ignore_missing_imports = true
 no_implicit_optional = true
 check_untyped_defs = true
 disable_error_code = ["import-untyped"]
+

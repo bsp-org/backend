@@ -7,16 +7,17 @@ from unittest.mock import patch
 import pytest
 
 from src.users.api import User2FA
+from src.users.models import generate_encrypt_key
 
 
 class TestUser2FA:
     """Test suite for User2FA class."""
 
     @pytest.fixture
-    def encryption_key(self):
+    def encryption_key(self) -> str:
         """Provide a valid 32-byte encryption key for AES-256, base64-encoded."""
         # Generate a 32-byte key and base64-encode it (as stored in the database)
-        return base64.b64encode(b"TestKey1TestKey2TestKey3TestKey4").decode('utf-8')
+        return generate_encrypt_key()
 
     @pytest.fixture
     def user_2fa(self, encryption_key):
@@ -29,8 +30,8 @@ class TestUser2FA:
         assert user_2fa is not None
         assert hasattr(user_2fa, 'user_enc_key')
         # user_enc_key should be the decoded bytes (32 bytes for AES-256)
-        assert user_2fa.user_enc_key == base64.b64decode(encryption_key)
-        assert len(user_2fa.user_enc_key) == 32
+        assert user_2fa.user_enc_key == encryption_key
+        assert len(base64.b64decode(user_2fa.user_enc_key)) == 32
 
     def test_encryption_decryption_roundtrip(self, user_2fa):
         """Test that encryption and decryption are inverse operations."""

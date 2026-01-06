@@ -7,9 +7,9 @@ import string
 from datetime import UTC, datetime, timedelta
 
 import jwt
-from Crypto.Cipher import AES
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
+from cryptography.fernet import Fernet
 
 from src.config import settings
 from src.email_service import send_login_code_email
@@ -106,19 +106,17 @@ class User2FA:
     TOKEN_DIGITS = 6
     SALT_LEN = 5
     TOKEN_VALID = timedelta(minutes=5)
-    IV = b'OurBSP_IV4567890'
 
     def __init__(self, user_enc_key: str):
-        # Decode the base64-encoded key to get the 32-byte AES key
-        self.user_enc_key = base64.b64decode(user_enc_key)
+        self.user_enc_key = user_enc_key
 
     def _enc(self, token: str) -> str:
-        cipher = AES.new(self.user_enc_key, AES.MODE_CFB, self.IV)
-        return base64.b64encode(cipher.encrypt(token.encode())).decode()
+        cipher = Fernet(self.user_enc_key)
+        return cipher.encrypt(token.encode()).decode()
 
     def _dec(self, token: str) -> str:
-        cipher = AES.new(self.user_enc_key, AES.MODE_CFB, self.IV)
-        return cipher.decrypt(base64.b64decode(token)).decode()
+        cipher = Fernet(self.user_enc_key)
+        return cipher.decrypt(token).decode()
 
     def generate_code_token(self) -> tuple[str, str, datetime]:
         code = ''.join(random.SystemRandom().choice(string.digits) for _ in range(self.TOKEN_DIGITS))

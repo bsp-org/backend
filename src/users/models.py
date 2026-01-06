@@ -4,14 +4,15 @@ import base64
 import secrets
 from datetime import datetime
 
+from cryptography.fernet import Fernet
 from peewee import BooleanField, CharField, DateTimeField, Model
 
 from src.db import database
 
 
-def generate_encrypt_key():
+def generate_encrypt_key() -> str:
     """Generate a random encryption key for AES-256 (32 bytes), base64-encoded."""
-    return base64.b64encode(secrets.token_bytes(32)).decode('utf-8')
+    return Fernet.generate_key().decode()
 
 
 class BaseModel(Model):
