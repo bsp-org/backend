@@ -27,6 +27,7 @@ class BookInfo(BaseModel):
     id: int
     name: str
     display_name: str
+    chapter_count: int
 
 
 class VerseData(BaseModel):
@@ -36,6 +37,7 @@ class VerseData(BaseModel):
     chapter: int
     verse: int
     text: str
+    clean_text: str
 
 
 # Unified endpoint models
@@ -448,6 +450,8 @@ async def get_verses(
     # Apply pagination
     query = query.offset(offset).limit(page_size)
 
+    books_by_book_name = {book.name: book for book in books}
+
     # Execute and build results
     verses = list(query)
     verse_data = [
@@ -458,12 +462,18 @@ async def get_verses(
                 display_name=get_book_display_name(
                     book_key=verse.book_name, language=translation.language_code
                 ),
+                chapter_count=books_by_book_name[verse.book_name].chapter_count,
             ),
             chapter=verse.chapter,
             verse=verse.verse,
-            text=highlight_matches(verse.text, q, exact=exact, language_code=translation.language_code)
-            if (should_highlight and q)
-            else verse.text,
+            text=(
+                highlight_matches(
+                    verse.text, q, exact=exact, language_code=translation.language_code
+                )
+                if (should_highlight and q)
+                else verse.text
+            ),
+            clean_text=verse.text,
         )
         for verse in verses
     ]
