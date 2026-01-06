@@ -450,7 +450,17 @@ async def get_verses(
     # Apply pagination
     query = query.offset(offset).limit(page_size)
 
-    books_by_book_name = {book.name: book for book in books}
+    # Fetch book metadata with chapter counts for the translation
+    books_query = (
+        Verse.select(
+            Verse.book_id,
+            Verse.book_name,
+            fn.COUNT(fn.DISTINCT(Verse.chapter)).alias("chapter_count"),
+        )
+        .where(Verse.translation == translation)
+        .group_by(Verse.book_id, Verse.book_name)
+    )
+    books_by_book_name = {row.book_name: row for row in books_query}
 
     # Execute and build results
     verses = list(query)
