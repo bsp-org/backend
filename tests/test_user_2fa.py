@@ -31,7 +31,7 @@ class TestUser2FA:
         assert hasattr(user_2fa, "user_enc_key")
         # user_enc_key should be the decoded bytes (32 bytes for AES-256)
         assert user_2fa.user_enc_key == encryption_key
-        assert len(base64.b64decode(user_2fa.user_enc_key)) == 32
+        assert len(base64.urlsafe_b64decode(user_2fa.user_enc_key)) == 32
 
     def test_encryption_decryption_roundtrip(self, user_2fa):
         """Test that encryption and decryption are inverse operations."""
