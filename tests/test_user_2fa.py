@@ -28,7 +28,7 @@ class TestUser2FA:
         """Test User2FA initialization."""
         user_2fa = User2FA(encryption_key)
         assert user_2fa is not None
-        assert hasattr(user_2fa, 'user_enc_key')
+        assert hasattr(user_2fa, "user_enc_key")
         # user_enc_key should be the decoded bytes (32 bytes for AES-256)
         assert user_2fa.user_enc_key == encryption_key
         assert len(base64.b64decode(user_2fa.user_enc_key)) == 32
@@ -107,7 +107,7 @@ class TestUser2FA:
         assert user_2fa.verify_code_token("12345a", token) is False
         assert user_2fa.verify_code_token("abcdef", token) is False
 
-    @patch('src.users.api.datetime')
+    @patch("src.users.api.datetime")
     def test_verify_code_token_expired(self, mock_datetime, user_2fa):
         """Test verification with expired token."""
         # Generate a code/token
@@ -145,8 +145,8 @@ class TestUser2FA:
     def test_multiple_instances_with_different_keys(self):
         """Test that instances with different keys cannot decrypt each other's tokens."""
         # Create two different 32-byte keys, base64-encoded
-        key1 = base64.b64encode(b"Key1Key1Key1Key1Key1Key1Key1Key1").decode('utf-8')
-        key2 = base64.b64encode(b"Key2Key2Key2Key2Key2Key2Key2Key2").decode('utf-8')
+        key1 = base64.b64encode(b"Key1Key1Key1Key1Key1Key1Key1Key1").decode("utf-8")
+        key2 = base64.b64encode(b"Key2Key2Key2Key2Key2Key2Key2Key2").decode("utf-8")
 
         user_2fa_1 = User2FA(key1)
         user_2fa_2 = User2FA(key2)

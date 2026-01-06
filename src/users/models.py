@@ -1,7 +1,5 @@
 """User models."""
 
-import base64
-import secrets
 from datetime import datetime
 
 from cryptography.fernet import Fernet

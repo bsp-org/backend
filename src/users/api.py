@@ -1,15 +1,14 @@
 """Authentication API endpoints."""
 
-import base64
 import logging
 import random
 import string
 from datetime import UTC, datetime, timedelta
 
 import jwt
+from cryptography.fernet import Fernet
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, EmailStr
-from cryptography.fernet import Fernet
 
 from src.config import settings
 from src.email_service import send_login_code_email
@@ -23,15 +22,7 @@ class EmailLoginRequest(BaseModel):
 
     email: EmailStr
 
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "email": "user@example.com"
-                }
-            ]
-        }
-    }
+    model_config = {"json_schema_extra": {"examples": [{"email": "user@example.com"}]}}
 
 
 class Email2LoginRequest(BaseModel):
@@ -47,7 +38,7 @@ class Email2LoginRequest(BaseModel):
                 {
                     "email": "user@example.com",
                     "email_code": "123456",
-                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 }
             ]
         }
@@ -65,7 +56,7 @@ class EmailAuthResponse(BaseModel):
             "examples": [
                 {
                     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                    "email_token_valid_until": "2025-12-31T12:05:00"
+                    "email_token_valid_until": "2025-12-31T12:05:00",
                 }
             ]
         }
@@ -76,7 +67,7 @@ class AuthResponse(BaseModel):
     """Response containing JWT access token for authenticated requests."""
 
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa
     token_valid_until: datetime | None = None
 
     model_config = {
@@ -84,7 +75,7 @@ class AuthResponse(BaseModel):
             "examples": [
                 {
                     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJpYXQiOjE3MDM5NjY0MDB9...",
-                    "token_type": "bearer"
+                    "token_type": "bearer",
                 }
             ]
         }
@@ -119,8 +110,12 @@ class User2FA:
         return cipher.decrypt(token).decode()
 
     def generate_code_token(self) -> tuple[str, str, datetime]:
-        code = ''.join(random.SystemRandom().choice(string.digits) for _ in range(self.TOKEN_DIGITS))
-        salt = ''.join(random.SystemRandom().choice(string.ascii_letters) for _ in range(self.SALT_LEN))
+        code = "".join(
+            random.SystemRandom().choice(string.digits) for _ in range(self.TOKEN_DIGITS)
+        )
+        salt = "".join(
+            random.SystemRandom().choice(string.ascii_letters) for _ in range(self.SALT_LEN)
+        )
 
         valid_until = datetime.now() + self.TOKEN_VALID
 
@@ -136,7 +131,7 @@ class User2FA:
 
         try:
             raw_token = self._dec(token)
-            salt, raw_code, raw_valid_until = raw_token.split('#')
+            salt, raw_code, raw_valid_until = raw_token.split("#")
             valid_until = datetime.fromisoformat(raw_valid_until)
         except Exception as e:
             # Invalid token format, decryption failed, or other parsing errors
@@ -174,15 +169,13 @@ auth_router = APIRouter(prefix="/api", tags=["auth"])
                 "application/json": {
                     "example": {
                         "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                        "email_token_valid_until": "2025-12-31T12:05:00"
+                        "email_token_valid_until": "2025-12-31T12:05:00",
                     }
                 }
-            }
+            },
         },
-        422: {
-            "description": "Invalid email format"
-        }
-    }
+        422: {"description": "Invalid email format"},
+    },
 )
 async def login(login_data: EmailLoginRequest) -> EmailAuthResponse:
     """Initiate email login flow."""
@@ -192,7 +185,6 @@ async def login(login_data: EmailLoginRequest) -> EmailAuthResponse:
     except User.DoesNotExist:
         user = User(email=login_data.email)
         user.save()
-
 
     # generate the code, token
     u2fa = User2FA(user.encrypt_key)
@@ -209,7 +201,6 @@ async def login(login_data: EmailLoginRequest) -> EmailAuthResponse:
         token=token,
         email_token_valid_until=valid_until,
     )
-
 
 
 @auth_router.post(
@@ -235,15 +226,13 @@ async def login(login_data: EmailLoginRequest) -> EmailAuthResponse:
                 "application/json": {
                     "example": {
                         "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20iLCJpYXQiOjE3MDM5NjY0MDB9...",
-                        "token_type": "bearer"
+                        "token_type": "bearer",
                     }
                 }
-            }
+            },
         },
-        401: {
-            "description": "Invalid code, expired token, or user not found"
-        }
-    }
+        401: {"description": "Invalid code, expired token, or user not found"},
+    },
 )
 async def verify_email_login(login_data: Email2LoginRequest) -> AuthResponse:
     """Verify email code and return JWT access token."""

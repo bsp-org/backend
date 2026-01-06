@@ -18,10 +18,7 @@ class TestLoginEmail:
         """Test login with a new user creates account and sends email."""
         mock_send_email.return_value = True
 
-        response = await client.post(
-            "/api/login/email",
-            json={"email": "newuser@example.com"}
-        )
+        response = await client.post("/api/login/email", json={"email": "newuser@example.com"})
 
         assert response.status_code == 200
         data = response.json()
@@ -50,10 +47,7 @@ class TestLoginEmail:
         user = User(email="existing@example.com")
         user.save()
 
-        response = await client.post(
-            "/api/login/email",
-            json={"email": "existing@example.com"}
-        )
+        response = await client.post("/api/login/email", json={"email": "existing@example.com"})
 
         assert response.status_code == 200
         data = response.json()
@@ -72,10 +66,7 @@ class TestLoginEmail:
     @patch("src.users.api.send_login_code_email")
     async def test_login_email_invalid_email(self, mock_send_email, client):
         """Test login with invalid email format."""
-        response = await client.post(
-            "/api/login/email",
-            json={"email": "not-an-email"}
-        )
+        response = await client.post("/api/login/email", json={"email": "not-an-email"})
 
         assert response.status_code == 422  # Validation error
         mock_send_email.assert_not_called()
@@ -86,10 +77,7 @@ class TestLoginEmail:
         """Test login continues even if email sending fails."""
         mock_send_email.return_value = False
 
-        response = await client.post(
-            "/api/login/email",
-            json={"email": "test@example.com"}
-        )
+        response = await client.post("/api/login/email", json={"email": "test@example.com"})
 
         # Should still return success even if email fails
         assert response.status_code == 200
@@ -110,10 +98,7 @@ class TestLoginEmailVerify:
         mock_send_email.return_value = True
 
         # First, get a login code
-        login_response = await client.post(
-            "/api/login/email",
-            json={"email": "verify@example.com"}
-        )
+        login_response = await client.post("/api/login/email", json={"email": "verify@example.com"})
         assert login_response.status_code == 200
         login_data = login_response.json()
 
@@ -123,11 +108,7 @@ class TestLoginEmailVerify:
         # Now verify with the code
         verify_response = await client.post(
             "/api/login/email_verify",
-            json={
-                "email": "verify@example.com",
-                "email_code": code,
-                "token": login_data["token"]
-            }
+            json={"email": "verify@example.com", "email_code": code, "token": login_data["token"]},
         )
 
         assert verify_response.status_code == 200
@@ -136,11 +117,7 @@ class TestLoginEmailVerify:
         assert verify_data["token_type"] == "bearer"  # noqa: S105
 
         # Verify the JWT token
-        decoded = jwt.decode(
-            verify_data["access_token"],
-            settings.jwt_secret,
-            algorithms=["HS256"]
-        )
+        decoded = jwt.decode(verify_data["access_token"], settings.jwt_secret, algorithms=["HS256"])
         assert decoded["email"] == "verify@example.com"
         assert "iat" in decoded
 
@@ -156,8 +133,7 @@ class TestLoginEmailVerify:
 
         # First, get a login code
         login_response = await client.post(
-            "/api/login/email",
-            json={"email": "wrongcode@example.com"}
+            "/api/login/email", json={"email": "wrongcode@example.com"}
         )
         login_data = login_response.json()
 
@@ -167,8 +143,8 @@ class TestLoginEmailVerify:
             json={
                 "email": "wrongcode@example.com",
                 "email_code": "000000",  # Wrong code
-                "token": login_data["token"]
-            }
+                "token": login_data["token"],
+            },
         )
 
         assert verify_response.status_code == 401
@@ -183,8 +159,8 @@ class TestLoginEmailVerify:
             json={
                 "email": "nonexistent@example.com",
                 "email_code": "123456",
-                "token": "some-token"
-            }
+                "token": "some-token",
+            },
         )
 
         assert verify_response.status_code == 401
@@ -198,8 +174,7 @@ class TestLoginEmailVerify:
 
         # First, get a login code
         login_response = await client.post(
-            "/api/login/email",
-            json={"email": "invalidtoken@example.com"}
+            "/api/login/email", json={"email": "invalidtoken@example.com"}
         )
         assert login_response.status_code == 200
 
@@ -212,8 +187,8 @@ class TestLoginEmailVerify:
             json={
                 "email": "invalidtoken@example.com",
                 "email_code": code,
-                "token": "invalid-token-format"
-            }
+                "token": "invalid-token-format",
+            },
         )
 
         assert verify_response.status_code == 401
@@ -227,8 +202,7 @@ class TestLoginEmailVerify:
 
         # First, get a login code for one email
         login_response = await client.post(
-            "/api/login/email",
-            json={"email": "correct@example.com"}
+            "/api/login/email", json={"email": "correct@example.com"}
         )
         login_data = login_response.json()
         code = mock_send_email.call_args[0][1]
@@ -236,11 +210,7 @@ class TestLoginEmailVerify:
         # Try to verify with a different email
         verify_response = await client.post(
             "/api/login/email_verify",
-            json={
-                "email": "wrong@example.com",
-                "email_code": code,
-                "token": login_data["token"]
-            }
+            json={"email": "wrong@example.com", "email_code": code, "token": login_data["token"]},
         )
 
         assert verify_response.status_code == 401
@@ -253,10 +223,7 @@ class TestLoginEmailVerify:
         mock_send_email.return_value = True
 
         # First, get a login code
-        login_response = await client.post(
-            "/api/login/email",
-            json={"email": "format@example.com"}
-        )
+        login_response = await client.post("/api/login/email", json={"email": "format@example.com"})
         login_data = login_response.json()
 
         # Test with wrong length
@@ -265,8 +232,8 @@ class TestLoginEmailVerify:
             json={
                 "email": "format@example.com",
                 "email_code": "12345",  # Too short
-                "token": login_data["token"]
-            }
+                "token": login_data["token"],
+            },
         )
         assert verify_response.status_code == 401
 
@@ -276,7 +243,7 @@ class TestLoginEmailVerify:
             json={
                 "email": "format@example.com",
                 "email_code": "12345a",
-                "token": login_data["token"]
-            }
+                "token": login_data["token"],
+            },
         )
         assert verify_response.status_code == 401

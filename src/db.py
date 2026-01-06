@@ -31,7 +31,7 @@ async def get_db_connection():
             database.close()
 
 
-async def get_session() -> AsyncGenerator[PostgresqlExtDatabase, None]:
+async def get_session() -> AsyncGenerator[PostgresqlExtDatabase, None]:  # noqa
     """FastAPI dependency that yields a database connection."""
     async with get_db_connection() as db:
         yield db

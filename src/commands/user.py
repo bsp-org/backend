@@ -18,7 +18,13 @@ def cli():
 @cli.command()
 @click.option("--username", prompt=True, help="Username for the new user")
 @click.option("--email", prompt=True, help="Email for the new user")
-@click.option("--password", prompt=True, hide_input=True, confirmation_prompt=True, help="Password for the new user")
+@click.option(
+    "--password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Password for the new user",
+)
 def create_user(username: str, email: str, password: str):
     """Create a new user."""
     try:
