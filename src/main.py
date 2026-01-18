@@ -29,6 +29,7 @@ app = FastAPI(
     license_info={
         "name": "MIT",
     },
+    root_path=settings.root_path,
 )
 
 # Configure CORS
