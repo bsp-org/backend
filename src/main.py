@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api import api_router
 from src.config import settings
+from src.users.api import auth_router
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +18,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Bible App API",
+    title="Bible Search API",
     version="0.0.0",
+    description="API for searching and accessing Bible content with user authentication",
     lifespan=lifespan,
+    contact={
+        "name": "BSP Org",
+        "email": "biblesearchproject@gmail.com",
+    },
+    license_info={
+        "name": "MIT",
+    },
 )
 
 # Configure CORS
@@ -37,5 +46,6 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Include the API router in the main app
+# Include routers in the main app
+app.include_router(auth_router)
 app.include_router(api_router)

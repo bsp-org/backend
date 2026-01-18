@@ -7,6 +7,8 @@ A modern REST API for accessing Bible translations with powerful search and cont
 ### Prerequisites
 
 - Docker & Docker Compose
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) - Fast Python package installer and resolver
 - (Optional) Make for convenience commands
 
 ### Setup
@@ -62,12 +64,11 @@ For all endpoints, check the docs.
 ### Local Setup (without Docker)
 
 ```bash
-# Create virtual environment
-python3.13 -m venv .venv
-source .venv/bin/activate
+# Install uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install dependencies
-pip install -r requirements-dev.txt
+# Create virtual environment and install dependencies
+uv sync
 
 # Start database only
 docker-compose up -d db
@@ -76,9 +77,22 @@ docker-compose up -d db
 # POSTGRES_HOST=localhost
 
 # Run migrations/load data
-python -m src.loaders
+uv run python -m src.loaders
 
 # Start API
-uvicorn src.main:app --reload
+uv run uvicorn src.main:app --reload
 ```
+
+### Using Make Commands
+
+The project includes a Makefile for common development tasks:
+
+- `make install` - Install dependencies
+- `make run` - Run the development server
+- `make test` - Run tests
+- `make lint` - Run linting checks
+- `make fmt` - Format code
+- `make type` - Run type checking
+- `make cov` - Run tests with coverage report
+- `make precommit-install` - Install pre-commit hooks
 

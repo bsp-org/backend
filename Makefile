@@ -1,17 +1,16 @@
 SHELL := /bin/bash
 PYTHON ?= python3.13
 VENV := .venv
-PY := $(VENV)/bin/python
+PY := uv run python
 PIP := $(VENV)/bin/pip
 
 .PHONY: venv install run up down logs migrate lint fmt type test cov precommit-install
 
 venv:
-	[ -d $(VENV) ] || $(PYTHON) -m venv $(VENV)
-	$(PY) -m pip install --upgrade pip
+	[ -d $(VENV) ] || uv venv .venv
 
 install: venv
-	$(PIP) install -r requirements-dev.txt
+	uv sync
 
 run:
 	$(PY) -m uvicorn src.main:app --reload
