@@ -40,6 +40,16 @@ dev = [
 local = [
     "python-lsp-server>=1.14.0",
 ]
+notebooks = [
+    "openai",
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "scikit-learn",
+    "plotly",
+    "jupyter",
+    "ipykernel",
+]
 
 
 [tool.hatch.build.targets.wheel]
