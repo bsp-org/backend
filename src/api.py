@@ -86,7 +86,7 @@ class TranslationMetadata(BaseModel):
 
 
 # Create API router
-api_router = APIRouter(prefix="/api", tags=["api"])
+api_router = APIRouter(tags=["api"])
 
 
 @api_router.get("/translations", response_model=list[TranslationInfo], tags=["translations"])

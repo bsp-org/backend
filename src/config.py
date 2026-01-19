@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     env: str = Field(default="development", alias="APP_ENV")
     debug: bool = Field(default=False, alias="DEBUG")
 
+    root_path: str = "/api"
+
     postgres_host: str = Field(default="localhost", alias="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
     postgres_db: str = Field(default="bible", alias="POSTGRES_DB")

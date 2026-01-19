@@ -144,7 +144,7 @@ class User2FA:
         return raw_code == code
 
 
-auth_router = APIRouter(prefix="/api", tags=["auth"])
+auth_router = APIRouter(tags=["auth"])
 
 
 @auth_router.post(
